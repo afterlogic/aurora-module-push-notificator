@@ -1,0 +1,14 @@
+{
+    "Disabled": [
+		false,
+		"bool"
+	],
+	"Secret": [
+		"",
+		"string"
+	],
+	"ServerKey": [
+		"",
+		"string"
+	]
+}
