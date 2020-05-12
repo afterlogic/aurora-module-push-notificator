@@ -16,39 +16,43 @@ class Module extends \Aurora\System\Module\AbstractModule
 		}
 	}
 
-	public function SetPushToken($Secret, $Email, $Uid, $Token)
+	public function SetPushToken($Email, $Uid, $Token)
 	{
-		$this->checkSecret($Secret);
 		$mResult = false;
-		$oAccount = \Aurora\Modules\Core\Module::Decorator()->GetAccountUsedToAuthorize($Email);
-		if ($oAccount)
+		\Aurora\Api::checkUserRoleIsAtLeast(\Aurora\System\Enums\UserRole::NormalUser);
+		$oUser = \Aurora\Api::getAuthenticatedUser();
+		if ($oUser)
 		{
-			$oPushToken = (new \Aurora\System\EAV\Query(Classes\PushToken::class))
-				->select()
-				->where(
-					[
-						'$AND' => [
-							'IdAccount' => $oAccount->EntityId,
-							'Uid' => $Uid
+			$oAccount = \Aurora\Modules\Mail\Module::Decorator()->GetAccountByEmail($Email, $oUser->EntityId);
+			if ($oAccount && $oAccount->IdUser === $oUser->EntityId)
+			{
+				$oPushToken = (new \Aurora\System\EAV\Query(Classes\PushToken::class))
+					->select()
+					->where(
+						[
+							'$AND' => [
+								'IdAccount' => $oAccount->EntityId,
+								'Uid' => $Uid
+							]
 						]
-					]
-				)
-				->one()
-				->exec();
-			if ($oPushToken)
-			{
-				$oPushToken->Token = $Token;
-				$mResult = $oPushToken->saveAttribute('Token');
-			}
-			else
-			{
-				$oPushToken = new Classes\PushToken();
-				$oPushToken->IdAccount = $oAccount->EntityId;
-				$oPushToken->Email = $oAccount->Email;
-				$oPushToken->Uid = $Uid;
-				$oPushToken->Token = $Token;
+					)
+					->one()
+					->exec();
+				if ($oPushToken)
+				{
+					$oPushToken->Token = $Token;
+					$mResult = $oPushToken->saveAttribute('Token');
+				}
+				else
+				{
+					$oPushToken = new Classes\PushToken();
+					$oPushToken->IdAccount = $oAccount->EntityId;
+					$oPushToken->Email = $oAccount->Email;
+					$oPushToken->Uid = $Uid;
+					$oPushToken->Token = $Token;
 
-				$mResult = $oPushToken->save();
+					$mResult = $oPushToken->save();
+				}
 			}
 		}
 
