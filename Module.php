@@ -5,6 +5,7 @@ class Module extends \Aurora\System\Module\AbstractModule
 {
 	public function init()
 	{
+		$this->subscribeEvent('Mail::BeforeDeleteAccount', array($this, 'onBeforeDeleteMailAccount'));
 	}
 
 	protected function checkSecret($sSecret)
@@ -105,5 +106,32 @@ class Module extends \Aurora\System\Module\AbstractModule
 		}
 
 		return $mResult;
+	}
+
+	public function onBeforeDeleteMailAccount($aArgs, &$mResult)
+	{
+		$oAccount = $aArgs['Account'];
+		$oUser = $aArgs['User'];
+		if ($oUser instanceof \Aurora\Modules\Core\Classes\User
+				&& $oAccount instanceof \Aurora\Modules\Mail\Classes\Account
+				&& $oAccount->Email === $oUser->PublicId
+			)
+		{
+			$aPushTokens = (new \Aurora\System\EAV\Query(Classes\PushToken::class))
+			->select()
+			->where(
+				[
+					'$AND' => [
+						'IdAccount' => $oAccount->EntityId,
+					]
+				]
+			)
+			->exec();
+
+			foreach ($aPushTokens as $oPushToken)
+			{
+				$oPushToken->delete();
+			}
+		}
 	}
 }
