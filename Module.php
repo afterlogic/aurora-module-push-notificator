@@ -159,28 +159,28 @@ class Module extends \Aurora\System\Module\AbstractModule
 			{
 				echo \json_encode($this->Decorator()->SendPush($sSecret, $sEmail, $aData));
 			}
-			else if (!empty($sPath))
-			{
-				$rEml = \fopen($sPath, 'r');
-				$oMessage = \ZBateson\MailMimeParser\Message::parse($rEml);
-				if ($oMessage)
-				{
-					$oTo = $oMessage->getHeader('To');
-					$sEmail = $oTo->getEmail();
+			// else if (!empty($sPath))
+			// {
+			// 	$rEml = \fopen($sPath, 'r');
+			// 	$oMessage = \ZBateson\MailMimeParser\Message::parse($rEml);
+			// 	if ($oMessage)
+			// 	{
+			// 		$oTo = $oMessage->getHeader('To');
+			// 		$sEmail = $oTo->getEmail();
 
-					$oFrom = $oMessage->getHeader('From');
-					$sFrom = $oFrom->getEmail();
+			// 		$oFrom = $oMessage->getHeader('From');
+			// 		$sFrom = $oFrom->getEmail();
 
-					$sSubject = $oMessage->getHeaderValue('Subject');
-					$aData = [
-						"From" => $sFrom,
-						"To" => $sEmail,
-						"Subject" => $sSubject
-					];
+			// 		$sSubject = $oMessage->getHeaderValue('Subject');
+			// 		$aData = [
+			// 			"From" => $sFrom,
+			// 			"To" => $sEmail,
+			// 			"Subject" => $sSubject
+			// 		];
 
-					echo \json_encode($this->Decorator()->SendPush($sSecret, $sEmail, $aData));
-				}
-			}
+			// 		echo \json_encode($this->Decorator()->SendPush($sSecret, $sEmail, $aData));
+			// 	}
+			// }
 			else
 			{
 				echo 'Invalid arguments';
