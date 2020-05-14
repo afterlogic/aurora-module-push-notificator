@@ -16,6 +16,7 @@ namespace Aurora\Modules\PushNotificator\Classes;
 class PushToken extends \Aurora\System\EAV\Entity
 {
 	protected $aStaticMap = [
+		'IdUser'	=> ['int', 0, true],
 		'IdAccount'	=> ['int', 0, true],
 		'Email'		=> ['string', '', true],
 		'Uid'		=> ['string', ''],

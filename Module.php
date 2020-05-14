@@ -21,17 +21,21 @@ class Module extends \Aurora\System\Module\AbstractModule
 	/**
 	 *
 	 */
-	public function SetPushToken($Uid, $Token, $Emails)
+	public function SetPushToken($Uid, $Token, $Users)
 	{
 		$mResult = false;
-		\Aurora\Api::checkUserRoleIsAtLeast(\Aurora\System\Enums\UserRole::NormalUser);
-		$oUser = \Aurora\Api::getAuthenticatedUser();
-		if ($oUser)
+		\Aurora\Api::checkUserRoleIsAtLeast(\Aurora\System\Enums\UserRole::Anonymous);
+
+		foreach ($Users as $aUser)
 		{
+			$oUser = \Aurora\Api::getAuthenticatedUser($aUser['AuthToken']);
+			if ($oUser)
+			{
 				$aPushTokens = (new \Aurora\System\EAV\Query(Classes\PushToken::class))
 					->select()
 					->where(
 						[
+							'IdUser' => $oUser->EntityId,
 							'Token' => $Token,
 							'Uid' => $Uid
 						]
@@ -44,20 +48,27 @@ class Module extends \Aurora\System\Module\AbstractModule
 						$oPushToken->delete();
 					}
 				}
-				foreach ($Emails as $sEmail)
-				{
-					$oAccount = \Aurora\Modules\Mail\Module::Decorator()->GetAccountByEmail($sEmail, $oUser->EntityId);
-					if ($oAccount && $oAccount->IdUser === $oUser->EntityId)
-					{
-						$oPushToken = new Classes\PushToken();
-						$oPushToken->IdAccount = $oAccount->EntityId;
-						$oPushToken->Email = $oAccount->Email;
-						$oPushToken->Uid = $Uid;
-						$oPushToken->Token = $Token;
 
-						$mResult = $oPushToken->save();
+				$aEmails = $aUser['Emails'];
+				if (\is_array($aEmails) && count($aEmails) > 0)
+				{
+					foreach ($aEmails as $sEmail)
+					{
+						$oAccount = \Aurora\Modules\Mail\Module::Decorator()->GetAccountByEmail($sEmail, $oUser->EntityId);
+						if ($oAccount && $oAccount->IdUser === $oUser->EntityId)
+						{
+							$oPushToken = new Classes\PushToken();
+							$oPushToken->IdUser = $oUser->EntityId;
+							$oPushToken->IdAccount = $oAccount->EntityId;
+							$oPushToken->Email = $oAccount->Email;
+							$oPushToken->Uid = $Uid;
+							$oPushToken->Token = $Token;
+
+							$mResult = $oPushToken->save();
+						}
 					}
 				}
+			}
 		}
 
 		return $mResult;
