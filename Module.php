@@ -77,54 +77,70 @@ class Module extends \Aurora\System\Module\AbstractModule
 	/**
 	 *
 	 */
-	public function SendPush($Secret, $Email, $Data)
+	public function SendPush($Secret, $Data)
 	{
 		$mResult = [];
 		$this->checkSecret($Secret);
 
-		$aPushTokens = (new \Aurora\System\EAV\Query(Classes\PushToken::class))
-			->select()
-			->where(
-				[
-					'$AND' => [
-						'Email' => $Email,
-					]
-				]
-			)
-			->exec();
-
-		$sUrl = 'https://fcm.googleapis.com/fcm/send';
-		$sServerKey = $this->getConfig('ServerKey');
-
-		$aRequestHeaders = [
-			'Content-Type: application/json',
-			'Authorization: key=' . $sServerKey,
-		];
-
-		foreach ($aPushTokens as $oPushToken)
+		if (is_array($Data) && count($Data) > 0)
 		{
-			$aRequestBody = [
-				'to' => $oPushToken->Token,
-				'data' => $Data,
+			$sUrl = 'https://fcm.googleapis.com/fcm/send';
+			$sServerKey = $this->getConfig('ServerKey');
+
+			$aRequestHeaders = [
+				'Content-Type: application/json',
+				'Authorization: key=' . $sServerKey,
 			];
-			$aFields = json_encode($aRequestBody);
 
-			$ch = curl_init();
-			curl_setopt_array($ch,
-				[
-					CURLOPT_URL => $sUrl,
-					CURLOPT_CUSTOMREQUEST => 'POST',
-					CURLOPT_HTTPHEADER => $aRequestHeaders,
-					CURLOPT_POSTFIELDS => $aFields,
-					CURLOPT_RETURNTRANSFER => true,
-					CURLOPT_FOLLOWLOCATION => true
-				]
-			);
+			foreach ($Data as $aDataItems)
+			{
+				if (isset($aDataItems['Email']) && isset($aDataItems['Data']))
+				{
+					$sEmail = $aDataItems['Email'];
+					$aData = $aDataItems['Data'];
+					if (\is_array($aData) && count($aData) > 0)
+					{
+						$aPushTokens = (new \Aurora\System\EAV\Query(Classes\PushToken::class))
+							->select()
+							->where(
+								[
+									'$AND' => [
+										'Email' => $sEmail,
+									]
+								]
+							)
+							->exec();
 
-			$mResult[$oPushToken->Token] = \json_decode(curl_exec($ch), true);
-			curl_close($ch);
+						foreach ($aPushTokens as $oPushToken)
+						{
+							foreach($aData as $aDataItem)
+							{
+								$aRequestBody = [
+									'to' => $oPushToken->Token,
+									'data' => $aDataItem,
+								];
+								$aFields = json_encode($aRequestBody);
+
+								$ch = curl_init();
+								curl_setopt_array($ch,
+									[
+										CURLOPT_URL => $sUrl,
+										CURLOPT_CUSTOMREQUEST => 'POST',
+										CURLOPT_HTTPHEADER => $aRequestHeaders,
+										CURLOPT_POSTFIELDS => $aFields,
+										CURLOPT_RETURNTRANSFER => true,
+										CURLOPT_FOLLOWLOCATION => true
+									]
+								);
+
+								$mResult[$oPushToken->Token] = \json_decode(curl_exec($ch), true);
+								curl_close($ch);
+							}
+						}
+					}
+				}
+			}
 		}
-
 		\Aurora\System\Api::LogObject($mResult, \Aurora\System\Enums\LogLevel::Full, 'push-');
 
 		return $mResult;
