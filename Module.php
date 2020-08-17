@@ -118,6 +118,7 @@ class Module extends \Aurora\System\Module\AbstractModule
 								$aRequestBody = [
 									'to' => $oPushToken->Token,
 									'data' => $aDataItem,
+									'content_available' => true,
 								];
 								$aFields = json_encode($aRequestBody);
 
