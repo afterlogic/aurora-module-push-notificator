@@ -10,5 +10,13 @@
 	"ServerKey": [
 		"",
 		"string"
+	],
+	"AllowCustomData": [
+		true,
+		"bool"
+	],
+	"DebugOutput": [
+		true,
+		"bool"
 	]
 }
