@@ -35,8 +35,6 @@ class Module extends \Aurora\System\Module\AbstractModule
 					->select()
 					->where(
 						[
-							'IdUser' => $oUser->EntityId,
-							'Token' => $Token,
 							'Uid' => $Uid
 						]
 					)
