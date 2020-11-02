@@ -26,43 +26,60 @@ class Module extends \Aurora\System\Module\AbstractModule
 		$mResult = false;
 		\Aurora\Api::checkUserRoleIsAtLeast(\Aurora\System\Enums\UserRole::Anonymous);
 
+		$bAuthStatus = true;
 		foreach ($Users as $aUser)
 		{
 			$oUser = \Aurora\Api::getAuthenticatedUser($aUser['AuthToken']);
-			if ($oUser)
+			if (!$oUser)
 			{
-				$aPushTokens = (new \Aurora\System\EAV\Query(Classes\PushToken::class))
-					->select()
-					->where(
-						[
-							'Uid' => $Uid
-						]
-					)
-					->exec();
-				foreach ($aPushTokens as $oPushToken)
+				$bAuthStatus = false;
+				break;
+			}
+		}
+
+		if ($bAuthStatus)
+		{
+			$aPushTokens = (new \Aurora\System\EAV\Query(Classes\PushToken::class))
+				->select()
+				->where(
+					[
+						'Uid' => $Uid
+					]
+				)
+				->exec();
+			foreach ($aPushTokens as $oPushToken)
+			{
+				if ($oPushToken instanceof Classes\PushToken)
 				{
-					if ($oPushToken instanceof Classes\PushToken)
-					{
-						$oPushToken->delete();
-					}
+					$oPushToken->delete();
 				}
+			}
+		}
 
-				$aEmails = $aUser['Emails'];
-				if (\is_array($aEmails) && count($aEmails) > 0)
+		if (!empty($Token) && count($Users) > 0)
+		{
+			foreach ($Users as $aUser)
+			{
+				$oUser = \Aurora\Api::getAuthenticatedUser($aUser['AuthToken']);
+				if ($oUser)
 				{
-					foreach ($aEmails as $sEmail)
+					$aEmails = $aUser['Emails'];
+					if (\is_array($aEmails) && count($aEmails) > 0)
 					{
-						$oAccount = \Aurora\Modules\Mail\Module::Decorator()->GetAccountByEmail($sEmail, $oUser->EntityId);
-						if ($oAccount && $oAccount->IdUser === $oUser->EntityId)
+						foreach ($aEmails as $sEmail)
 						{
-							$oPushToken = new Classes\PushToken();
-							$oPushToken->IdUser = $oUser->EntityId;
-							$oPushToken->IdAccount = $oAccount->EntityId;
-							$oPushToken->Email = $oAccount->Email;
-							$oPushToken->Uid = $Uid;
-							$oPushToken->Token = $Token;
+							$oAccount = \Aurora\Modules\Mail\Module::Decorator()->GetAccountByEmail($sEmail, $oUser->EntityId);
+							if ($oAccount && $oAccount->IdUser === $oUser->EntityId)
+							{
+								$oPushToken = new Classes\PushToken();
+								$oPushToken->IdUser = $oUser->EntityId;
+								$oPushToken->IdAccount = $oAccount->EntityId;
+								$oPushToken->Email = $oAccount->Email;
+								$oPushToken->Uid = $Uid;
+								$oPushToken->Token = $Token;
 
-							$mResult = $oPushToken->save();
+								$mResult = $oPushToken->save();
+							}
 						}
 					}
 				}
@@ -125,7 +142,7 @@ class Module extends \Aurora\System\Module\AbstractModule
 										//]
            							]
 								];
-								
+
 								if (false) {
 									//data notifications
 									$aRequestBody['content_available'] = true;
@@ -134,39 +151,39 @@ class Module extends \Aurora\System\Module\AbstractModule
 									// ];
 								} else {
 									// alert notifications
-									
+
 									/* is not required for flutter
 									// $aRequestBody['android'] = [
 										// "notification" => [
 											// 'To' => $aDataItem['To']
 										// ]
 									// ];
-									
+
 									// $aRequestBody['apns']['payload'] = [
 										// 'To' => $aDataItem['To']
 									// ];
 									*/
-									
+
 									$aRequestBody['notification'] = [
 										'title' => $aDataItem['From'],
 										'body' => $aDataItem['Subject']
 									];
 									$aRequestBody['data']['click_action'] = 'FLUTTER_NOTIFICATION_CLICK';
 								}
-								
+
 								if ($dAllowCustomData && isset($aDataItems['Custom'])) {
 									foreach ($aDataItems['Custom'] as $propName => $propValue)	{
 										$aRequestBody[$propName] = $propValue;
 									}
 								}
-								
+
 								$aFields = json_encode($aRequestBody);
 
 								if ($dDebug && isset($aDataItems['Debug']) && $aDataItems['Debug'] === true) {
 									var_dump($aFields);
 									exit;
 								}
-								
+
 								$ch = curl_init();
 								curl_setopt_array($ch,
 									[
@@ -181,7 +198,7 @@ class Module extends \Aurora\System\Module\AbstractModule
 
 								$aPushResult = \json_decode(curl_exec($ch), true);
 								$mResult[$oPushToken->Token] = $aPushResult;
-								
+
 								if ($aPushResult['failure'] == 1 && isset($aPushResult['results'][0]) && $aPushResult['results'][0]['error'] === 'NotRegistered')
 								{
 									$oPushToken->delete();
