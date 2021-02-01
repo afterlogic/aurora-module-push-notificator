@@ -283,4 +283,43 @@ class Module extends \Aurora\System\Module\AbstractModule
 			}
 		}
 	}
+
+	public function IsPushNotificationEnabled($AccountID)
+	{
+		$bResult = false;
+
+		$oModule = \Aurora\System\Api::GetModuleDecorator('CpanelIntegrator');
+		if ($oModule)
+		{
+			$bResult = !empty($oModule->GetScriptForward($AccountID));
+		}
+
+		return $bResult;
+	}
+
+	public function EnablePushNotification($AccountID)
+	{
+		$bResult = false;
+
+		$oModule = \Aurora\System\Api::GetModuleDecorator('CpanelIntegrator');
+		if ($oModule)
+		{
+			$bResult = $oModule->CreateScriptForward($AccountID);
+		}
+
+		return $bResult;
+	}
+
+	public function DisablePushNotification($AccountID)
+	{
+		$bResult = false;
+
+		$oModule = \Aurora\System\Api::GetModuleDecorator('CpanelIntegrator');
+		if ($oModule)
+		{
+			$bResult = $oModule->RemoveScriptForward($AccountID);
+		}
+
+		return $bResult;
+	}
 }
