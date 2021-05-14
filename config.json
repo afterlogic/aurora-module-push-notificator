@@ -12,11 +12,11 @@
 		"string"
 	],
 	"AllowCustomData": [
-		true,
+		false,
 		"bool"
 	],
 	"DebugOutput": [
-		true,
+		false,
 		"bool"
 	]
 }
