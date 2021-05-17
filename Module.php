@@ -79,6 +79,10 @@ class Module extends \Aurora\System\Module\AbstractModule
 								$oPushToken->Token = $Token;
 
 								$mResult = $oPushToken->save();
+								if ($mResult)
+								{
+									$this->EnablePushNotification($oPushToken->IdAccount);
+								}
 							}
 						}
 					}
@@ -108,7 +112,6 @@ class Module extends \Aurora\System\Module\AbstractModule
 				'Content-Type: application/json',
 				'Authorization: key=' . $sServerKey,
 			];
-
 			foreach ($Data as $aDataItems)
 			{
 				if (isset($aDataItems['Email']) && isset($aDataItems['Data']))
@@ -128,82 +131,97 @@ class Module extends \Aurora\System\Module\AbstractModule
 							)
 							->exec();
 
-						foreach ($aPushTokens as $oPushToken)
+						if (count($aPushTokens) > 0)
 						{
-							foreach($aData as $aDataItem)
+							foreach ($aPushTokens as $oPushToken)
 							{
-								$aRequestBody = [
-									'to' => $oPushToken->Token,
-									'data' => $aDataItem,
-									//'content_available' => true,
-									'apns'=> [
-										//"headers" => [
-											//"apns-priority" => "5"
-										//]
-           							]
-								];
-
-								if (false) {
-									//data notifications
-									$aRequestBody['content_available'] = true;
-									// $aRequestBody['apns']['headers'] = [
-										// "apns-priority" => "5"
-									// ];
-								} else {
-									// alert notifications
-
-									/* is not required for flutter
-									// $aRequestBody['android'] = [
-										// "notification" => [
-											// 'To' => $aDataItem['To']
-										// ]
-									// ];
-
-									// $aRequestBody['apns']['payload'] = [
-										// 'To' => $aDataItem['To']
-									// ];
-									*/
-
-									$aRequestBody['notification'] = [
-										'title' => $aDataItem['From'],
-										'body' => $aDataItem['Subject']
-									];
-									$aRequestBody['data']['click_action'] = 'FLUTTER_NOTIFICATION_CLICK';
-								}
-
-								if ($dAllowCustomData && isset($aDataItems['Custom'])) {
-									foreach ($aDataItems['Custom'] as $propName => $propValue)	{
-										$aRequestBody[$propName] = $propValue;
-									}
-								}
-
-								$aFields = json_encode($aRequestBody);
-
-								if ($dDebug && isset($aDataItems['Debug']) && $aDataItems['Debug'] === true) {
-									var_dump($aFields);
-									exit;
-								}
-
-								$ch = curl_init();
-								curl_setopt_array($ch,
-									[
-										CURLOPT_URL => $sUrl,
-										CURLOPT_CUSTOMREQUEST => 'POST',
-										CURLOPT_HTTPHEADER => $aRequestHeaders,
-										CURLOPT_POSTFIELDS => $aFields,
-										CURLOPT_RETURNTRANSFER => true,
-										CURLOPT_FOLLOWLOCATION => true
-									]
-								);
-
-								$aPushResult = \json_decode(curl_exec($ch), true);
-								$mResult[$oPushToken->Token] = $aPushResult;
-
-								if ($aPushResult['failure'] == 1 && isset($aPushResult['results'][0]) && $aPushResult['results'][0]['error'] === 'NotRegistered')
+								foreach($aData as $aDataItem)
 								{
-									$oPushToken->delete();
+									$aRequestBody = [
+										'to' => $oPushToken->Token,
+										'data' => $aDataItem,
+										//'content_available' => true,
+										'apns'=> [
+											//"headers" => [
+												//"apns-priority" => "5"
+											//]
+										]
+									];
+
+									if (false) {
+										//data notifications
+										$aRequestBody['content_available'] = true;
+										// $aRequestBody['apns']['headers'] = [
+											// "apns-priority" => "5"
+										// ];
+									} else {
+										// alert notifications
+
+										/* is not required for flutter
+										// $aRequestBody['android'] = [
+											// "notification" => [
+												// 'To' => $aDataItem['To']
+											// ]
+										// ];
+
+										// $aRequestBody['apns']['payload'] = [
+											// 'To' => $aDataItem['To']
+										// ];
+										*/
+
+										$aRequestBody['notification'] = [
+											'title' => $aDataItem['From'],
+											'body' => $aDataItem['Subject']
+										];
+										$aRequestBody['data']['click_action'] = 'FLUTTER_NOTIFICATION_CLICK';
+									}
+
+									if ($dAllowCustomData && isset($aDataItems['Custom'])) {
+										foreach ($aDataItems['Custom'] as $propName => $propValue)	{
+											$aRequestBody[$propName] = $propValue;
+										}
+									}
+
+									$aFields = json_encode($aRequestBody);
+
+									if ($dDebug && isset($aDataItems['Debug']) && $aDataItems['Debug'] === true) {
+										var_dump($aFields);
+										exit;
+									}
+
+									$ch = curl_init();
+									curl_setopt_array($ch,
+										[
+											CURLOPT_URL => $sUrl,
+											CURLOPT_CUSTOMREQUEST => 'POST',
+											CURLOPT_HTTPHEADER => $aRequestHeaders,
+											CURLOPT_POSTFIELDS => $aFields,
+											CURLOPT_RETURNTRANSFER => true,
+											CURLOPT_FOLLOWLOCATION => true
+										]
+									);
+
+									$aPushResult = \json_decode(curl_exec($ch), true);
+									$mResult[$oPushToken->Token] = $aPushResult;
+
+									if ($aPushResult['failure'] == 1 && isset($aPushResult['results'][0]) && $aPushResult['results'][0]['error'] === 'NotRegistered')
+									{
+										$oPushToken->delete();
+									}
+									curl_close($ch);
 								}
-								curl_close($ch);
+							}
+						}
+						else
+						{
+							$oUser = \Aurora\Modules\Core\Module::Decorator()->GetUserByPublicId($sEmail);
+							if ($oUser)
+							{
+								$oAccount = \Aurora\System\Api::GetModule('Mail')->GetAccountByEmail($sEmail, $oUser->EntityId);
+								if ($oAccount instanceof \Aurora\Modules\Mail\Classes\Account)
+								{
+									$this->DisablePushNotification($oAccount->EntityId);
+								}
 							}
 						}
 					}
