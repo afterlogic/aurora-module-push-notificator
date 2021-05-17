@@ -220,7 +220,11 @@ class Module extends \Aurora\System\Module\AbstractModule
 								$oAccount = \Aurora\System\Api::GetModule('Mail')->GetAccountByEmail($sEmail, $oUser->EntityId);
 								if ($oAccount instanceof \Aurora\Modules\Mail\Classes\Account)
 								{
-									$this->DisablePushNotification($oAccount->EntityId);
+									try
+									{
+										$this->DisablePushNotification($oAccount->EntityId);
+									}
+									catch (\Exception $oEx) {} // skip throw exception - pipe farward may not exists
 								}
 							}
 						}
