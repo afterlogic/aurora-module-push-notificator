@@ -1,6 +1,8 @@
 <?php
 namespace Aurora\Modules\PushNotificator;
 
+use Aurora\Modules\PushNotificator\Models\PushToken;
+
 class Module extends \Aurora\System\Module\AbstractModule
 {
 	public function init()
@@ -39,20 +41,10 @@ class Module extends \Aurora\System\Module\AbstractModule
 
 		if ($bAuthStatus)
 		{
-			$aPushTokens = (new \Aurora\System\EAV\Query(Classes\PushToken::class))
-				->select()
-				->where(
-					[
-						'Uid' => $Uid
-					]
-				)
-				->exec();
+			$aPushTokens = PushToken::where('Uid', $Uid)->get();
 			foreach ($aPushTokens as $oPushToken)
 			{
-				if ($oPushToken instanceof Classes\PushToken)
-				{
-					$oPushToken->delete();
-				}
+				$oPushToken->delete();
 			}
 		}
 
@@ -71,14 +63,14 @@ class Module extends \Aurora\System\Module\AbstractModule
 							$oAccount = \Aurora\Modules\Mail\Module::Decorator()->GetAccountByEmail($sEmail, $oUser->EntityId);
 							if ($oAccount && $oAccount->IdUser === $oUser->EntityId)
 							{
-								$oPushToken = new Classes\PushToken();
-								$oPushToken->IdUser = $oUser->EntityId;
-								$oPushToken->IdAccount = $oAccount->EntityId;
-								$oPushToken->Email = $oAccount->Email;
-								$oPushToken->Uid = $Uid;
-								$oPushToken->Token = $Token;
+								$oPushToken = PushToken::create([
+									'IdUser' => $oUser->EntityId,
+									'IdAccount'=> $oAccount->EntityId,
+									'Email'=>$oAccount->Email,
+									'Uid'=> $Uid,
+									'Token'=>$Token
+								]);
 
-								$mResult = $oPushToken->save();
 								if ($mResult)
 								{
 									$this->EnablePushNotification($oPushToken->IdAccount);
@@ -120,17 +112,7 @@ class Module extends \Aurora\System\Module\AbstractModule
 					$aData = $aDataItems['Data'];
 					if (\is_array($aData) && count($aData) > 0)
 					{
-						$aPushTokens = (new \Aurora\System\EAV\Query(Classes\PushToken::class))
-							->select()
-							->where(
-								[
-									'$AND' => [
-										'Email' => $sEmail,
-									]
-								]
-							)
-							->exec();
-
+						$aPushTokens = PushToken::where('Email', $sEmail)->get();
 						if (count($aPushTokens) > 0)
 						{
 							foreach ($aPushTokens as $oPushToken)
@@ -218,7 +200,7 @@ class Module extends \Aurora\System\Module\AbstractModule
 							if ($oUser)
 							{
 								$oAccount = \Aurora\System\Api::GetModule('Mail')->GetAccountByEmail($sEmail, $oUser->EntityId);
-								if ($oAccount instanceof \Aurora\Modules\Mail\Classes\Account)
+								if ($oAccount instanceof \Aurora\Modules\Mail\Models\MailAccount)
 								{
 									try
 									{
@@ -241,21 +223,12 @@ class Module extends \Aurora\System\Module\AbstractModule
 	{
 		$oAccount = $aArgs['Account'];
 		$oUser = $aArgs['User'];
-		if ($oUser instanceof \Aurora\Modules\Core\Classes\User
-				&& $oAccount instanceof \Aurora\Modules\Mail\Classes\Account
+		if ($oUser instanceof \Aurora\Modules\Core\Models\User
+				&& $oAccount instanceof \Aurora\Modules\Mail\Models\MailAccount
 				&& $oAccount->Email === $oUser->PublicId
 			)
 		{
-			$aPushTokens = (new \Aurora\System\EAV\Query(Classes\PushToken::class))
-			->select()
-			->where(
-				[
-					'$AND' => [
-						'IdAccount' => $oAccount->EntityId,
-					]
-				]
-			)
-			->exec();
+			$aPushTokens = PushToken::where('IdAccount', $oAccount->EntityId)->get();
 
 			foreach ($aPushTokens as $oPushToken)
 			{
