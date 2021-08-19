@@ -8,6 +8,10 @@ class PushToken extends Model
 {
     protected $table = 'core_push_notificator_tokens';
     protected $moduleName = 'PushNotificator';
+
+	protected $foreignModel = 'Aurora\Modules\Core\Models\User';
+	protected $foreignModelIdColumn = 'IdUser'; // Column that refers to an external table
+
     /**
      * The attributes that are mass assignable.
      *
