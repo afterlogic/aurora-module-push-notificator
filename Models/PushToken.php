@@ -3,13 +3,14 @@
 namespace Aurora\Modules\PushNotificator\Models;
 
 use \Aurora\System\Classes\Model;
+use Aurora\Modules\Core\Models\User;
 
 class PushToken extends Model
 {
     protected $table = 'core_push_notificator_tokens';
     protected $moduleName = 'PushNotificator';
 
-	protected $foreignModel = 'Aurora\Modules\Core\Models\User';
+	protected $foreignModel = User::class;
 	protected $foreignModelIdColumn = 'IdUser'; // Column that refers to an external table
 
     /**
