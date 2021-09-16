@@ -1,6 +1,8 @@
 <?php
 namespace Aurora\Modules\PushNotificator;
 
+use Aurora\Api;
+
 class Module extends \Aurora\System\Module\AbstractModule
 {
 	public function init()
@@ -170,8 +172,8 @@ class Module extends \Aurora\System\Module\AbstractModule
 										*/
 
 										$aRequestBody['notification'] = [
-											'title' => $aDataItem['From'],
-											'body' => $aDataItem['Subject']
+											'title' => \MailSo\Base\Utils::DecodeHeaderValue($aDataItem['From']),
+											'body' =>  \MailSo\Base\Utils::DecodeHeaderValue($aDataItem['Subject'])
 										];
 										$aRequestBody['data']['click_action'] = 'FLUTTER_NOTIFICATION_CLICK';
 									}
@@ -214,6 +216,7 @@ class Module extends \Aurora\System\Module\AbstractModule
 						}
 						else
 						{
+							Api::skipCheckUserRole(true);
 							$oUser = \Aurora\Modules\Core\Module::Decorator()->GetUserByPublicId($sEmail);
 							if ($oUser)
 							{
@@ -227,6 +230,7 @@ class Module extends \Aurora\System\Module\AbstractModule
 									catch (\Exception $oEx) {} // skip throw exception - pipe farward may not exists
 								}
 							}
+							Api::skipCheckUserRole(false);
 						}
 					}
 				}
