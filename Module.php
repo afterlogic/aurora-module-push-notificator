@@ -228,12 +228,7 @@ class Module extends \Aurora\System\Module\AbstractModule
 				&& $oAccount->Email === $oUser->PublicId
 			)
 		{
-			$aPushTokens = PushToken::where('IdAccount', $oAccount->EntityId)->get();
-
-			foreach ($aPushTokens as $oPushToken)
-			{
-				$oPushToken->delete();
-			}
+			$aPushTokens = PushToken::where('IdAccount', $oAccount->EntityId)->delete();
 		}
 	}
 
