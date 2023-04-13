@@ -12,6 +12,15 @@ class Module extends \Aurora\System\Module\AbstractModule
         \Aurora\System\Router::getInstance()->register($this->GetName(), 'push', [$this, 'onPushRoute']);
     }
 
+    /**
+     *
+     * @return Module
+     */
+    public static function Decorator()
+    {
+        return parent::Decorator();
+    }
+
     protected function checkSecret($sSecret)
     {
         $sSettingsSecret = $this->getConfig('Secret', '');
@@ -51,11 +60,12 @@ class Module extends \Aurora\System\Module\AbstractModule
                     $aEmails = $aUser['Emails'];
                     if (\is_array($aEmails) && count($aEmails) > 0) {
                         foreach ($aEmails as $sEmail) {
-                            $oAccount = \Aurora\Modules\Mail\Module::Decorator()->GetAccountByEmail($sEmail, $oUser->EntityId);
-                            if ($oAccount && $oAccount->IdUser === $oUser->EntityId) {
+                            $oAccount = \Aurora\Modules\Mail\Module::Decorator()->GetAccountByEmail($sEmail, $oUser->Id);
+                            if ($oAccount && $oAccount->IdUser === $oUser->Id) {
+                                // @phpstan-ignore-next-line
                                 $oPushToken = PushToken::create([
-                                    'IdUser' => $oUser->EntityId,
-                                    'IdAccount'=> $oAccount->EntityId,
+                                    'IdUser' => $oUser->Id,
+                                    'IdAccount'=> $oAccount->Id,
                                     'Email'=>$oAccount->Email,
                                     'Uid'=> $Uid,
                                     'Token'=>$Token
@@ -75,7 +85,10 @@ class Module extends \Aurora\System\Module\AbstractModule
     }
 
     /**
-     *
+     * @param string $Secret
+     * @param array $Data
+     * 
+     * @return mixed
      */
     public function SendPush($Secret, $Data)
     {
@@ -99,6 +112,7 @@ class Module extends \Aurora\System\Module\AbstractModule
                     if (\is_array($aData) && count($aData) > 0) {
                         $aPushTokens = PushToken::where('Email', $sEmail)->get();
                         if (count($aPushTokens) > 0) {
+                            /** @var PushToken $oPushToken */
                             foreach ($aPushTokens as $oPushToken) {
                                 foreach ($aData as $aDataItem) {
                                     $aRequestBody = [
@@ -178,10 +192,12 @@ class Module extends \Aurora\System\Module\AbstractModule
                         } else {
                             $oUser = \Aurora\Modules\Core\Module::Decorator()->GetUserByPublicId($sEmail);
                             if ($oUser) {
-                                $oAccount = \Aurora\System\Api::GetModule('Mail')->GetAccountByEmail($sEmail, $oUser->EntityId);
+                                /** @var \Aurora\Modules\Mail\Module $oMailModule */
+                                $oMailModule = \Aurora\System\Api::GetModule('Mail');
+                                $oAccount = $oMailModule->GetAccountByEmail($sEmail, $oUser->Id);
                                 if ($oAccount instanceof \Aurora\Modules\Mail\Models\MailAccount) {
                                     try {
-                                        $this->DisablePushNotification($oAccount->EntityId);
+                                        $this->DisablePushNotification($oAccount->Id);
                                     } catch (\Exception $oEx) {
                                     } // skip throw exception - pipe farward may not exists
                                 }
@@ -204,20 +220,21 @@ class Module extends \Aurora\System\Module\AbstractModule
                 && $oAccount instanceof \Aurora\Modules\Mail\Models\MailAccount
                 && $oAccount->Email === $oUser->PublicId
         ) {
-            $aPushTokens = PushToken::where('IdAccount', $oAccount->EntityId)->delete();
+            $aPushTokens = PushToken::where('IdAccount', $oAccount->Id)->delete();
         }
     }
 
     public function onPushRoute()
     {
         $sSecret = isset($_GET['secret']) ? $_GET['secret'] : '';
-        $sEmail = isset($_GET['email']) ? $_GET['email'] : '';
+        // $sEmail = isset($_GET['email']) ? $_GET['email'] : '';
         $aData = isset($_GET['data']) ? \json_decode($_GET['data'], true) : '';
         $sPath = isset($_GET['path']) ? $_GET['path'] : '';
 
         if (!empty($sSecret)) {
-            if (!empty($sEmail) && !empty($aData)) {
-                echo \json_encode($this->Decorator()->SendPush($sSecret, $sEmail, $aData));
+            // if (!empty($sEmail) && !empty($aData)) {
+            if (!empty($aData)) {
+                echo \json_encode($this->Decorator()->SendPush($sSecret, $aData));
             }
             // else if (!empty($sPath))
             // {
@@ -251,6 +268,7 @@ class Module extends \Aurora\System\Module\AbstractModule
     {
         $bResult = false;
 
+         /** @var \Aurora\Modules\CpanelIntegrator\Module $oModule */
         $oModule = \Aurora\System\Api::GetModuleDecorator('CpanelIntegrator');
         if ($oModule) {
             $bResult = !empty($oModule->GetScriptForward($AccountID));
@@ -263,6 +281,7 @@ class Module extends \Aurora\System\Module\AbstractModule
     {
         $bResult = false;
 
+         /** @var \Aurora\Modules\CpanelIntegrator\Module $oModule */
         $oModule = \Aurora\System\Api::GetModuleDecorator('CpanelIntegrator');
         if ($oModule) {
             $bResult = $oModule->CreateScriptForward($AccountID);
@@ -275,6 +294,7 @@ class Module extends \Aurora\System\Module\AbstractModule
     {
         $bResult = false;
 
+        /** @var \Aurora\Modules\CpanelIntegrator\Module $oModule */
         $oModule = \Aurora\System\Api::GetModuleDecorator('CpanelIntegrator');
         if ($oModule) {
             $bResult = $oModule->RemoveScriptForward($AccountID);
