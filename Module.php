@@ -87,7 +87,7 @@ class Module extends \Aurora\System\Module\AbstractModule
     /**
      * @param string $Secret
      * @param array $Data
-     * 
+     *
      * @return mixed
      */
     public function SendPush($Secret, $Data)
@@ -268,7 +268,7 @@ class Module extends \Aurora\System\Module\AbstractModule
     {
         $bResult = false;
 
-         /** @var \Aurora\Modules\CpanelIntegrator\Module $oModule */
+        /** @var \Aurora\Modules\CpanelIntegrator\Module $oModule */
         $oModule = \Aurora\System\Api::GetModuleDecorator('CpanelIntegrator');
         if ($oModule) {
             $bResult = !empty($oModule->GetScriptForward($AccountID));
@@ -281,7 +281,7 @@ class Module extends \Aurora\System\Module\AbstractModule
     {
         $bResult = false;
 
-         /** @var \Aurora\Modules\CpanelIntegrator\Module $oModule */
+        /** @var \Aurora\Modules\CpanelIntegrator\Module $oModule */
         $oModule = \Aurora\System\Api::GetModuleDecorator('CpanelIntegrator');
         if ($oModule) {
             $bResult = $oModule->CreateScriptForward($AccountID);
