@@ -14,6 +14,8 @@ use Aurora\Modules\PushNotificator\Models\PushToken;
  * @license https://afterlogic.com/products/common-licensing Afterlogic Software License
  * @copyright Copyright (c) 2023, Afterlogic Corp.
  *
+ * @property Settings $oModuleSettings
+ *
  * @package Modules
  */
 class Module extends \Aurora\System\Module\AbstractModule
@@ -44,7 +46,7 @@ class Module extends \Aurora\System\Module\AbstractModule
 
     protected function checkSecret($sSecret)
     {
-        $sSettingsSecret = $this->getConfig('Secret', '');
+        $sSettingsSecret = $this->oModuleSettings->Secret;
         if (!(!empty($sSettingsSecret) && $sSettingsSecret === $sSecret)) {
             throw new \Aurora\System\Exceptions\ApiException(\Aurora\System\Notifications::AccessDenied);
         }
@@ -118,9 +120,9 @@ class Module extends \Aurora\System\Module\AbstractModule
 
         if (is_array($Data) && count($Data) > 0) {
             $sUrl = 'https://fcm.googleapis.com/fcm/send';
-            $sServerKey = $this->getConfig('ServerKey');
-            $dDebug = $this->getConfig('DebugOutput');
-            $dAllowCustomData = $this->getConfig('AllowCustomData');
+            $sServerKey = $this->oModuleSettings->ServerKey;
+            $dDebug = $this->oModuleSettings->DebugOutput;
+            $dAllowCustomData = $this->oModuleSettings->AllowCustomData;
 
             $aRequestHeaders = [
                 'Content-Type: application/json',
