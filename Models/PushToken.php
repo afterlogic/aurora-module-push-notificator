@@ -35,6 +35,7 @@ use Aurora\Modules\Core\Models\User;
  * @method static \Illuminate\Database\Eloquent\Builder|PushToken whereToken($value)
  * @method static \Illuminate\Database\Eloquent\Builder|PushToken whereUid($value)
  * @method static \Illuminate\Database\Eloquent\Builder|PushToken whereUpdatedAt($value)
+ * @method static \Illuminate\Database\Eloquent\Builder|PushToken create($value)
  * @mixin \Eloquent
  */
 class PushToken extends Model

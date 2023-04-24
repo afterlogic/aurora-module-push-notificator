@@ -91,7 +91,6 @@ class Module extends \Aurora\System\Module\AbstractModule
                         foreach ($aEmails as $sEmail) {
                             $oAccount = \Aurora\Modules\Mail\Module::Decorator()->GetAccountByEmail($sEmail, $oUser->Id);
                             if ($oAccount && $oAccount->IdUser === $oUser->Id) {
-                                // @phpstan-ignore-next-line
                                 $oPushToken = PushToken::create([
                                     'IdUser' => $oUser->Id,
                                     'IdAccount'=> $oAccount->Id,
