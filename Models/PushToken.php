@@ -25,6 +25,7 @@ use Aurora\Modules\Core\Models\User;
  * @method static \Illuminate\Database\Eloquent\Builder|PushToken newModelQuery()
  * @method static \Illuminate\Database\Eloquent\Builder|PushToken newQuery()
  * @method static \Illuminate\Database\Eloquent\Builder|PushToken query()
+ * @method static \Illuminate\Database\Eloquent\Builder|PushToken create(array $attributes)
  * @method static \Illuminate\Database\Eloquent\Builder|\Aurora\Modules\PushNotificator\Models\PushToken where(Closure|string|array|\Illuminate\Database\Query\Expression $column, mixed $operator = null, mixed $value = null, string $boolean = 'and')
  * @method static \Illuminate\Database\Eloquent\Builder|PushToken whereCreatedAt($value)
  * @method static \Illuminate\Database\Eloquent\Builder|PushToken whereEmail($value)
@@ -35,7 +36,6 @@ use Aurora\Modules\Core\Models\User;
  * @method static \Illuminate\Database\Eloquent\Builder|PushToken whereToken($value)
  * @method static \Illuminate\Database\Eloquent\Builder|PushToken whereUid($value)
  * @method static \Illuminate\Database\Eloquent\Builder|PushToken whereUpdatedAt($value)
- * @method static \Illuminate\Database\Eloquent\Builder|PushToken create($value)
  * @mixin \Eloquent
  */
 class PushToken extends Model
