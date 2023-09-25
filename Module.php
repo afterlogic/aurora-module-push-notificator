@@ -93,10 +93,10 @@ class Module extends \Aurora\System\Module\AbstractModule
                             if ($oAccount && $oAccount->IdUser === $oUser->Id) {
                                 $oPushToken = PushToken::create([
                                     'IdUser' => $oUser->Id,
-                                    'IdAccount'=> $oAccount->Id,
-                                    'Email'=>$oAccount->Email,
-                                    'Uid'=> $Uid,
-                                    'Token'=>$Token
+                                    'IdAccount' => $oAccount->Id,
+                                    'Email' => $oAccount->Email,
+                                    'Uid' => $Uid,
+                                    'Token' => $Token
                                 ]);
 
                                 if ($mResult) {
@@ -147,7 +147,7 @@ class Module extends \Aurora\System\Module\AbstractModule
                                         'to' => $oPushToken->Token,
                                         'data' => $aDataItem,
                                         //'content_available' => true,
-                                        'apns'=> [
+                                        'apns' => [
                                             //"headers" => [
                                                 //"apns-priority" => "5"
                                             //]
@@ -157,9 +157,9 @@ class Module extends \Aurora\System\Module\AbstractModule
                                     if (false) {
                                         //data notifications
                                         $aRequestBody['content_available'] = true;
-                                    // $aRequestBody['apns']['headers'] = [
-                                    // "apns-priority" => "5"
-                                    // ];
+                                        // $aRequestBody['apns']['headers'] = [
+                                        // "apns-priority" => "5"
+                                        // ];
                                     } else {
                                         // alert notifications
 
