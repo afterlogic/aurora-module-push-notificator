@@ -8,6 +8,9 @@
 namespace Aurora\Modules\PushNotificator;
 
 use Aurora\Modules\PushNotificator\Models\PushToken;
+use Aurora\System\Enums\UserRole;
+use Aurora\Modules\Core\Models\User;
+use Aurora\Modules\Mail\Models\MailAccount;
 
 /**
  * @license https://www.gnu.org/licenses/agpl-3.0.html AGPL-3.0
@@ -22,8 +25,9 @@ class Module extends \Aurora\System\Module\AbstractModule
 {
     public function init()
     {
+        $this->AddEntry('push', 'onSendPushRoute');
+
         $this->subscribeEvent('Mail::BeforeDeleteAccount', array($this, 'onBeforeDeleteMailAccount'));
-        \Aurora\System\Router::getInstance()->register($this->GetName(), 'push', [$this, 'onPushRoute']);
     }
 
     /**
@@ -50,6 +54,13 @@ class Module extends \Aurora\System\Module\AbstractModule
         return $this->oModuleSettings;
     }
 
+    /**
+     * Checks if provided secret is valid.
+     *
+     * @param string $sSecret
+     *
+     * @throws \Aurora\System\Exceptions\ApiException
+     */
     protected function checkSecret($sSecret)
     {
         $sSettingsSecret = $this->oModuleSettings->Secret;
@@ -59,11 +70,47 @@ class Module extends \Aurora\System\Module\AbstractModule
     }
 
     /**
+     * Subscribtion that deletes tokens of the deleted account.
+     */
+    public function onBeforeDeleteMailAccount($aArgs, &$mResult)
+    {
+        $oAccount = $aArgs['Account'];
+        $oUser = $aArgs['User'];
+        if ($oUser instanceof User && $oAccount instanceof MailAccount && $oAccount->Email === $oUser->PublicId) {
+            PushToken::where('IdAccount', $oAccount->Id)->delete();
+        }
+    }
+
+    /**
+     * An entry point that is a wrapper for the SendPush method.
+     */
+    public function onSendPushRoute()
+    {
+        $sSecret = isset($_GET['secret']) ? $_GET['secret'] : '';
+        $aData = isset($_GET['data']) ? \json_decode($_GET['data'], true) : '';
+
+        if (!empty($sSecret)) {
+            if (!empty($aData)) {
+                echo \json_encode($this->Decorator()->SendPush($sSecret, $aData));
+            } else {
+                echo 'Invalid arguments';
+            }
+        }
+    }
+
+    /**
+     * Register device in DB to send push notifications
      *
+     * @param string $Token
+     * @param string $Uid
+     * @param array $Users
+     *
+     * @return bool
      */
     public function SetPushToken($Uid, $Token, $Users)
     {
         $mResult = false;
+        // TODO: why authentication is not required?
         \Aurora\Api::checkUserRoleIsAtLeast(\Aurora\System\Enums\UserRole::Anonymous);
 
         $bAuthStatus = true;
@@ -75,6 +122,8 @@ class Module extends \Aurora\System\Module\AbstractModule
             }
         }
 
+        // TODO: $bAuthStatus can be true because $Users is empty list
+        // then PushToken can be deleted by Uid
         if ($bAuthStatus) {
             $aPushTokens = PushToken::where('Uid', $Uid)->get();
             foreach ($aPushTokens as $oPushToken) {
@@ -90,6 +139,7 @@ class Module extends \Aurora\System\Module\AbstractModule
                     if (\is_array($aEmails) && count($aEmails) > 0) {
                         foreach ($aEmails as $sEmail) {
                             $oAccount = \Aurora\Modules\Mail\Module::Decorator()->GetAccountByEmail($sEmail, $oUser->Id);
+                            // TODO: check for access to account is not reqired because we get account of paricula user
                             if ($oAccount && $oAccount->IdUser === $oUser->Id) {
                                 $oPushToken = PushToken::create([
                                     'IdUser' => $oUser->Id,
@@ -99,8 +149,8 @@ class Module extends \Aurora\System\Module\AbstractModule
                                     'Token' => $Token
                                 ]);
 
-                                if ($mResult) {
-                                    $this->EnablePushNotification($oPushToken->IdAccount);
+                                if ($oPushToken) {
+                                    $mResult = $this->EnablePushNotification($oPushToken->IdAccount);
                                 }
                             }
                         }
@@ -113,6 +163,8 @@ class Module extends \Aurora\System\Module\AbstractModule
     }
 
     /**
+     * Main method for sending push notifications
+     *
      * @param string $Secret
      * @param array $Data
      *
@@ -120,6 +172,8 @@ class Module extends \Aurora\System\Module\AbstractModule
      */
     public function SendPush($Secret, $Data)
     {
+        \Aurora\Api::checkUserRoleIsAtLeast(\Aurora\System\Enums\UserRole::Anonymous);
+
         $mResult = [];
         $this->checkSecret($Secret);
 
@@ -131,7 +185,11 @@ class Module extends \Aurora\System\Module\AbstractModule
 
             $aRequestHeaders = [
                 'Content-Type: application/json',
+                // Cloud Messaging API (Legacy)
                 'Authorization: key=' . $sServerKey,
+
+                // Firebase Cloud Messaging API (V1)
+                // 'Authorization: Bearer ya29.ElqKBGN2Ri_Uz...HnS_uNreA'
             ];
             foreach ($Data as $aDataItems) {
                 if (isset($aDataItems['Email']) && isset($aDataItems['Data'])) {
@@ -209,7 +267,11 @@ class Module extends \Aurora\System\Module\AbstractModule
                                     );
 
                                     $aPushResult = \json_decode(curl_exec($ch), true);
-                                    $mResult[$oPushToken->Token] = $aPushResult;
+                                    $mResult[] = [
+                                        "Email" => $sEmail,
+                                        "Token" => $oPushToken->Token,
+                                        "Response" => $aPushResult
+                                    ];
 
                                     if ($aPushResult['failure'] == 1 && isset($aPushResult['results'][0]) && $aPushResult['results'][0]['error'] === 'NotRegistered') {
                                         $oPushToken->delete();
@@ -223,7 +285,7 @@ class Module extends \Aurora\System\Module\AbstractModule
                                 /** @var \Aurora\Modules\Mail\Module $oMailModule */
                                 $oMailModule = \Aurora\System\Api::GetModule('Mail');
                                 $oAccount = $oMailModule->GetAccountByEmail($sEmail, $oUser->Id);
-                                if ($oAccount instanceof \Aurora\Modules\Mail\Models\MailAccount) {
+                                if ($oAccount instanceof MailAccount) {
                                     try {
                                         $this->DisablePushNotification($oAccount->Id);
                                     } catch (\Exception $oEx) {
@@ -235,97 +297,102 @@ class Module extends \Aurora\System\Module\AbstractModule
                 }
             }
         }
+        \Aurora\System\Api::Log("", \Aurora\System\Enums\LogLevel::Full, 'push-');
         \Aurora\System\Api::LogObject($mResult, \Aurora\System\Enums\LogLevel::Full, 'push-');
 
         return $mResult;
     }
 
-    public function onBeforeDeleteMailAccount($aArgs, &$mResult)
-    {
-        $oAccount = $aArgs['Account'];
-        $oUser = $aArgs['User'];
-        if ($oUser instanceof \Aurora\Modules\Core\Models\User
-                && $oAccount instanceof \Aurora\Modules\Mail\Models\MailAccount
-                && $oAccount->Email === $oUser->PublicId
-        ) {
-            $aPushTokens = PushToken::where('IdAccount', $oAccount->Id)->delete();
-        }
-    }
-
-    public function onPushRoute()
-    {
-        $sSecret = isset($_GET['secret']) ? $_GET['secret'] : '';
-        // $sEmail = isset($_GET['email']) ? $_GET['email'] : '';
-        $aData = isset($_GET['data']) ? \json_decode($_GET['data'], true) : '';
-        $sPath = isset($_GET['path']) ? $_GET['path'] : '';
-
-        if (!empty($sSecret)) {
-            // if (!empty($sEmail) && !empty($aData)) {
-            if (!empty($aData)) {
-                echo \json_encode($this->Decorator()->SendPush($sSecret, $aData));
-            }
-            // else if (!empty($sPath))
-            // {
-            // 	$rEml = \fopen($sPath, 'r');
-            // 	$oMessage = \ZBateson\MailMimeParser\Message::parse($rEml);
-            // 	if ($oMessage)
-            // 	{
-            // 		$oTo = $oMessage->getHeader('To');
-            // 		$sEmail = $oTo->getEmail();
-
-            // 		$oFrom = $oMessage->getHeader('From');
-            // 		$sFrom = $oFrom->getEmail();
-
-            // 		$sSubject = $oMessage->getHeaderValue('Subject');
-            // 		$aData = [
-            // 			"From" => $sFrom,
-            // 			"To" => $sEmail,
-            // 			"Subject" => $sSubject
-            // 		];
-
-            // 		echo \json_encode($this->Decorator()->SendPush($sSecret, $sEmail, $aData));
-            // 	}
-            // }
-            else {
-                echo 'Invalid arguments';
-            }
-        }
-    }
-
+    /**
+     * Checks if push notifications are enabled for account
+     *
+     * @param int $AccountID
+     *
+     * @return bool
+     */
     public function IsPushNotificationEnabled($AccountID)
     {
+        \Aurora\Api::checkUserRoleIsAtLeast(UserRole::NormalUser);
+
         $bResult = false;
 
-        /** @var \Aurora\Modules\CpanelIntegrator\Module $oModule */
-        $oModule = \Aurora\System\Api::GetModuleDecorator('CpanelIntegrator');
-        if ($oModule) {
-            $bResult = !empty($oModule->GetScriptForward($AccountID));
+        $oAccount = \Aurora\Modules\Mail\Module::Decorator()->GetAccount($AccountID);
+        $oAuthenticatedUser = \Aurora\Api::getAuthenticatedUser();
+
+        if ($oAccount instanceof MailAccount && $oAccount->IdUser === $oAuthenticatedUser->Id) {
+            $bResult = !!$oAccount->getExtendedProp($this->GetName() . '::NotificationsEnabled');
+        }
+
+        if ($bResult) {
+            /** @var \Aurora\Modules\CpanelIntegrator\Module $oModule */
+            $oModule = \Aurora\System\Api::GetModuleDecorator('CpanelIntegrator');
+            if ($oModule) {
+                $bResult = !empty($oModule->GetScriptForward($AccountID));
+            }
         }
 
         return $bResult;
     }
 
+    /**
+     * Disables push notifications for account
+     *
+     * @param int $AccountID
+     *
+     * @return bool
+     */
     public function EnablePushNotification($AccountID)
     {
+        \Aurora\Api::checkUserRoleIsAtLeast(UserRole::NormalUser);
+
         $bResult = false;
 
-        /** @var \Aurora\Modules\CpanelIntegrator\Module $oModule */
-        $oModule = \Aurora\System\Api::GetModuleDecorator('CpanelIntegrator');
-        if ($oModule) {
-            $bResult = $oModule->CreateScriptForward($AccountID);
+        $oAccount = \Aurora\Modules\Mail\Module::Decorator()->GetAccount($AccountID);
+        $oAuthenticatedUser = \Aurora\Api::getAuthenticatedUser();
+
+        if ($oAccount instanceof MailAccount && $oAccount->IdUser === $oAuthenticatedUser->Id) {
+            $oAccount->setExtendedProp($this->GetName() . '::NotificationsEnabled', true);
+            $bResult = !!$oAccount->save();
+        }
+
+        if ($bResult) {
+            /** @var \Aurora\Modules\CpanelIntegrator\Module $oModule */
+            $oModule = \Aurora\System\Api::GetModuleDecorator('CpanelIntegrator');
+            if ($oModule) {
+                $bResult = $oModule->CreateScriptForward($AccountID);
+            }
         }
 
         return $bResult;
     }
 
+    /**
+     * Disables push notifications for account
+     *
+     * @param int $AccountID
+     *
+     * @return bool
+     */
     public function DisablePushNotification($AccountID)
     {
+        \Aurora\Api::checkUserRoleIsAtLeast(UserRole::NormalUser);
+
         $bResult = false;
 
-        /** @var \Aurora\Modules\CpanelIntegrator\Module $oModule */
-        $oModule = \Aurora\System\Api::GetModuleDecorator('CpanelIntegrator');
-        if ($oModule) {
-            $bResult = $oModule->RemoveScriptForward($AccountID);
+        $oAccount = \Aurora\Modules\Mail\Module::Decorator()->GetAccount($AccountID);
+        $oAuthenticatedUser = \Aurora\Api::getAuthenticatedUser();
+
+        if ($oAccount instanceof MailAccount && $oAccount->IdUser === $oAuthenticatedUser->Id) {
+            $oAccount->setExtendedProp($this->GetName() . '::NotificationsEnabled', false);
+            $bResult = !!$oAccount->save();
+        }
+
+        if ($bResult) {
+            /** @var \Aurora\Modules\CpanelIntegrator\Module $oModule */
+            $oModule = \Aurora\System\Api::GetModuleDecorator('CpanelIntegrator');
+            if ($oModule) {
+                $bResult = $oModule->RemoveScriptForward($AccountID);
+            }
         }
 
         return $bResult;

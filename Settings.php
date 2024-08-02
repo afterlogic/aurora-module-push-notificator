@@ -26,19 +26,19 @@ class Settings extends \Aurora\System\Module\Settings
                 false,
                 "bool",
                 null,
-                ""
+                "Setting to true disables the module"
             ),
             "Secret" => new SettingsProperty(
                 "",
                 "string",
                 null,
-                ""
+                "The secret key for external services that triggers notifications"
             ),
             "ServerKey" => new SettingsProperty(
                 "",
                 "string",
                 null,
-                ""
+                "Cloud Messaging server key "
             ),
             "AllowCustomData" => new SettingsProperty(
                 false,
