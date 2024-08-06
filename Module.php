@@ -28,6 +28,7 @@ class Module extends \Aurora\System\Module\AbstractModule
         $this->AddEntry('push', 'onSendPushRoute');
 
         $this->subscribeEvent('Mail::BeforeDeleteAccount', array($this, 'onBeforeDeleteMailAccount'));
+        $this->subscribeEvent('SendNotification', array($this, 'onSendNotification'));
     }
 
     /**
@@ -81,103 +82,10 @@ class Module extends \Aurora\System\Module\AbstractModule
         }
     }
 
-    /**
-     * An entry point that is a wrapper for the SendPush method.
-     */
-    public function onSendPushRoute()
+    public function onSendNotification($aArgs, &$mResult)
     {
-        $sSecret = isset($_GET['secret']) ? $_GET['secret'] : '';
-        $aData = isset($_GET['data']) ? \json_decode($_GET['data'], true) : '';
+        if (is_array($aArgs) && count($aArgs) > 0) {
 
-        if (!empty($sSecret)) {
-            if (!empty($aData)) {
-                echo \json_encode($this->Decorator()->SendPush($sSecret, $aData));
-            } else {
-                echo 'Invalid arguments';
-            }
-        }
-    }
-
-    /**
-     * Register device in DB to send push notifications
-     *
-     * @param string $Token
-     * @param string $Uid
-     * @param array $Users
-     *
-     * @return bool
-     */
-    public function SetPushToken($Uid, $Token, $Users)
-    {
-        $mResult = false;
-        // TODO: why authentication is not required?
-        \Aurora\Api::checkUserRoleIsAtLeast(\Aurora\System\Enums\UserRole::Anonymous);
-
-        $bAuthStatus = true;
-        foreach ($Users as $aUser) {
-            $oUser = \Aurora\Api::getAuthenticatedUser($aUser['AuthToken']);
-            if (!$oUser) {
-                $bAuthStatus = false;
-                break;
-            }
-        }
-
-        // TODO: $bAuthStatus can be true because $Users is empty list
-        // then PushToken can be deleted by Uid
-        if ($bAuthStatus) {
-            $aPushTokens = PushToken::where('Uid', $Uid)->get();
-            foreach ($aPushTokens as $oPushToken) {
-                $oPushToken->delete();
-            }
-        }
-
-        if (!empty($Token) && count($Users) > 0) {
-            foreach ($Users as $aUser) {
-                $oUser = \Aurora\Api::getAuthenticatedUser($aUser['AuthToken']);
-                if ($oUser) {
-                    $aEmails = $aUser['Emails'];
-                    if (\is_array($aEmails) && count($aEmails) > 0) {
-                        foreach ($aEmails as $sEmail) {
-                            $oAccount = \Aurora\Modules\Mail\Module::Decorator()->GetAccountByEmail($sEmail, $oUser->Id);
-                            // TODO: check for access to account is not reqired because we get account of paricula user
-                            if ($oAccount && $oAccount->IdUser === $oUser->Id) {
-                                $oPushToken = PushToken::create([
-                                    'IdUser' => $oUser->Id,
-                                    'IdAccount' => $oAccount->Id,
-                                    'Email' => $oAccount->Email,
-                                    'Uid' => $Uid,
-                                    'Token' => $Token
-                                ]);
-
-                                if ($oPushToken) {
-                                    $mResult = $this->EnablePushNotification($oPushToken->IdAccount);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        return $mResult;
-    }
-
-    /**
-     * Main method for sending push notifications
-     *
-     * @param string $Secret
-     * @param array $Data
-     *
-     * @return mixed
-     */
-    public function SendPush($Secret, $Data)
-    {
-        \Aurora\Api::checkUserRoleIsAtLeast(\Aurora\System\Enums\UserRole::Anonymous);
-
-        $mResult = [];
-        $this->checkSecret($Secret);
-
-        if (is_array($Data) && count($Data) > 0) {
             $sUrl = 'https://fcm.googleapis.com/fcm/send';
             $sServerKey = $this->oModuleSettings->ServerKey;
             $dDebug = $this->oModuleSettings->DebugOutput;
@@ -191,7 +99,7 @@ class Module extends \Aurora\System\Module\AbstractModule
                 // Firebase Cloud Messaging API (V1)
                 // 'Authorization: Bearer ya29.ElqKBGN2Ri_Uz...HnS_uNreA'
             ];
-            foreach ($Data as $aDataItems) {
+            foreach ($aArgs as $aDataItems) {
                 if (isset($aDataItems['Email']) && isset($aDataItems['Data'])) {
                     $sEmail = $aDataItems['Email'];
                     $aData = $aDataItems['Data'];
@@ -299,6 +207,113 @@ class Module extends \Aurora\System\Module\AbstractModule
         }
         \Aurora\System\Api::Log("", \Aurora\System\Enums\LogLevel::Full, 'push-');
         \Aurora\System\Api::LogObject($mResult, \Aurora\System\Enums\LogLevel::Full, 'push-');
+    }
+
+    /**
+     * An entry point that is a wrapper for the SendPush method.
+     */
+    public function onSendPushRoute()
+    {
+        $sSecret = isset($_GET['secret']) ? $_GET['secret'] : '';
+        $aData = isset($_GET['data']) ? \json_decode($_GET['data'], true) : '';
+
+        if (!empty($sSecret)) {
+            if (!empty($aData)) {
+                echo \json_encode($this->Decorator()->SendPush($sSecret, $aData));
+            } else {
+                echo 'Invalid arguments';
+            }
+        }
+    }
+
+    /**
+     * Register device in DB to send push notifications
+     *
+     * @param string $Token
+     * @param string $Uid
+     * @param array $Users
+     *
+     * @return bool
+     */
+    public function SetPushToken($Uid, $Token, $Users)
+    {
+        $mResult = false;
+        // TODO: why authentication is not required?
+        \Aurora\Api::checkUserRoleIsAtLeast(\Aurora\System\Enums\UserRole::Anonymous);
+
+        $bAuthStatus = true;
+        foreach ($Users as $aUser) {
+            $oUser = \Aurora\Api::getAuthenticatedUser($aUser['AuthToken']);
+            if (!$oUser) {
+                $bAuthStatus = false;
+                break;
+            }
+        }
+
+        // TODO: $bAuthStatus can be true because $Users is empty list
+        // then PushToken can be deleted by Uid
+        if ($bAuthStatus) {
+            $aPushTokens = PushToken::where('Uid', $Uid)->get();
+            foreach ($aPushTokens as $oPushToken) {
+                $oPushToken->delete();
+            }
+        }
+
+        if (!empty($Token) && count($Users) > 0) {
+            foreach ($Users as $aUser) {
+                $oUser = \Aurora\Api::getAuthenticatedUser($aUser['AuthToken']);
+                if ($oUser) {
+                    $aEmails = $aUser['Emails'];
+                    if (\is_array($aEmails) && count($aEmails) > 0) {
+                        foreach ($aEmails as $sEmail) {
+                            $oAccount = \Aurora\Modules\Mail\Module::Decorator()->GetAccountByEmail($sEmail, $oUser->Id);
+                            // TODO: check for access to account is not reqired because we get account of paricula user
+                            if ($oAccount && $oAccount->IdUser === $oUser->Id) {
+                                $oPushToken = PushToken::create([
+                                    'IdUser' => $oUser->Id,
+                                    'IdAccount' => $oAccount->Id,
+                                    'Email' => $oAccount->Email,
+                                    'Uid' => $Uid,
+                                    'Token' => $Token
+                                ]);
+
+                                if ($oPushToken) {
+                                    $mResult = $this->EnablePushNotification($oPushToken->IdAccount);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return $mResult;
+    }
+
+    /**
+     * Main method for sending push notifications
+     *
+     * @param string $Secret
+     * @param array $Data
+     *
+     * @return mixed
+     */
+    public function SendPush($Secret, $Data)
+    {
+        \Aurora\Api::checkUserRoleIsAtLeast(\Aurora\System\Enums\UserRole::Anonymous);
+
+        $mResult = [];
+        $this->checkSecret($Secret);
+
+        if (is_array($Data) && count($Data) > 0) {
+            $aArgs = $Data;
+
+            $this->broadcastEvent(
+                'SendNotification',
+                $aArgs,
+                $mResult
+            );
+        }
 
         return $mResult;
     }
