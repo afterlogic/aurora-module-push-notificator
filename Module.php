@@ -188,18 +188,21 @@ class Module extends \Aurora\System\Module\AbstractModule
                                 }
                             }
                         } else {
-                            $oUser = \Aurora\Modules\Core\Module::Decorator()->GetUserByPublicId($sEmail);
-                            if ($oUser) {
-                                /** @var \Aurora\Modules\Mail\Module $oMailModule */
-                                $oMailModule = \Aurora\System\Api::GetModule('Mail');
-                                $oAccount = $oMailModule->GetAccountByEmail($sEmail, $oUser->Id);
-                                if ($oAccount instanceof MailAccount) {
-                                    try {
-                                        $this->DisablePushNotification($oAccount->Id);
-                                    } catch (\Exception $oEx) {
-                                    } // skip throw exception - pipe farward may not exists
+                            try {
+                                $oUser = \Aurora\Modules\Core\Module::Decorator()->GetUserByPublicId($sEmail);
+                                if ($oUser) {
+                                    /** @var \Aurora\Modules\Mail\Module $oMailModule */
+                                    $oMailModule = \Aurora\System\Api::GetModule('Mail');
+                                    if ($oMailModule) {
+                                        $oAccount = $oMailModule->getAccountsManager()->getAccountByEmail($sEmail, $oUser->Id);
+                                        \Aurora\System\Api::GrantAdminPrivileges();
+                                        if ($oAccount instanceof MailAccount) {
+                                            $this->DisablePushNotification($oAccount->Id, $oUser->Id);
+                                        }
+                                    }
                                 }
-                            }
+                            } catch (\Exception $oEx) {
+                            } // skip throw exception - pipe farward may not exists
                         }
                     }
                 }
@@ -385,19 +388,24 @@ class Module extends \Aurora\System\Module\AbstractModule
      * Disables push notifications for account
      *
      * @param int $AccountID
+     * @param int $UserId
      *
      * @return bool
      */
-    public function DisablePushNotification($AccountID)
+    public function DisablePushNotification($AccountID, $UserId = null)
     {
-        \Aurora\Api::checkUserRoleIsAtLeast(UserRole::NormalUser);
+        if ($UserId) {
+            \Aurora\Api::checkUserRoleIsAtLeast(UserRole::SuperAdmin);
+        } else {
+            \Aurora\Api::checkUserRoleIsAtLeast(UserRole::NormalUser);
+        }
 
         $bResult = false;
 
         $oAccount = \Aurora\Modules\Mail\Module::Decorator()->GetAccount($AccountID);
         $oAuthenticatedUser = \Aurora\Api::getAuthenticatedUser();
 
-        if ($oAccount instanceof MailAccount && $oAccount->IdUser === $oAuthenticatedUser->Id) {
+        if ($oAccount instanceof MailAccount && ($oAccount->IdUser === $oAuthenticatedUser->Id || $oAccount->IdUser === $UserId)) {
             $oAccount->setExtendedProp($this->GetName() . '::NotificationsEnabled', false);
             $bResult = !!$oAccount->save();
         }
