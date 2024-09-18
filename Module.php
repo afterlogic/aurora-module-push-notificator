@@ -11,6 +11,7 @@ use Aurora\Modules\PushNotificator\Models\PushToken;
 use Aurora\System\Enums\UserRole;
 use Aurora\Modules\Core\Models\User;
 use Aurora\Modules\Mail\Models\MailAccount;
+use Google\Client;
 
 /**
  * @license https://www.gnu.org/licenses/agpl-3.0.html AGPL-3.0
@@ -55,6 +56,16 @@ class Module extends \Aurora\System\Module\AbstractModule
         return $this->oModuleSettings;
     }
 
+    public function getAccessToken($serviceAccountPath)
+    {
+        $client = new Client();
+        $client->setAuthConfig($serviceAccountPath);
+        $client->addScope('https://www.googleapis.com/auth/firebase.messaging');
+        $client->useApplicationDefaultCredentials();
+        $token = $client->fetchAccessTokenWithAssertion();
+        return $token['access_token'];
+    }
+
     /**
      * Checks if provided secret is valid.
      *
@@ -84,20 +95,19 @@ class Module extends \Aurora\System\Module\AbstractModule
 
     public function onSendNotification($aArgs, &$mResult)
     {
-        if (is_array($aArgs) && count($aArgs) > 0) {
+        $projectId = $this->oModuleSettings->ProjectId;
+        $serviceAccountPath = $this->oModuleSettings->FirebaseServiceAccountPath;
+        if (is_array($aArgs) && count($aArgs) > 0 && !empty($projectId) && !empty($serviceAccountPath)) {
+            $sUrl = 'https://fcm.googleapis.com/v1/projects/' . $projectId . '/messages:send';
 
-            $sUrl = 'https://fcm.googleapis.com/fcm/send';
-            $sServerKey = $this->oModuleSettings->ServerKey;
             $dDebug = $this->oModuleSettings->DebugOutput;
             $dAllowCustomData = $this->oModuleSettings->AllowCustomData;
 
+            $accessToken = $this->getAccessToken($serviceAccountPath);
+
             $aRequestHeaders = [
                 'Content-Type: application/json',
-                // Cloud Messaging API (Legacy)
-                'Authorization: key=' . $sServerKey,
-
-                // Firebase Cloud Messaging API (V1)
-                // 'Authorization: Bearer ya29.ElqKBGN2Ri_Uz...HnS_uNreA'
+                'Authorization: Bearer ' . $accessToken,
             ];
             foreach ($aArgs as $aDataItems) {
                 if (isset($aDataItems['Email']) && isset($aDataItems['Data'])) {
@@ -110,43 +120,15 @@ class Module extends \Aurora\System\Module\AbstractModule
                             foreach ($aPushTokens as $oPushToken) {
                                 foreach ($aData as $aDataItem) {
                                     $aRequestBody = [
-                                        'to' => $oPushToken->Token,
+                                        'token' => $oPushToken->Token,
                                         'data' => $aDataItem,
-                                        //'content_available' => true,
-                                        'apns' => [
-                                            //"headers" => [
-                                                //"apns-priority" => "5"
-                                            //]
-                                        ]
                                     ];
 
-                                    if (false) {
-                                        //data notifications
-                                        $aRequestBody['content_available'] = true;
-                                        // $aRequestBody['apns']['headers'] = [
-                                        // "apns-priority" => "5"
-                                        // ];
-                                    } else {
-                                        // alert notifications
-
-                                        /* is not required for flutter
-                                        // $aRequestBody['android'] = [
-                                            // "notification" => [
-                                                // 'To' => $aDataItem['To']
-                                            // ]
-                                        // ];
-
-                                        // $aRequestBody['apns']['payload'] = [
-                                            // 'To' => $aDataItem['To']
-                                        // ];
-                                        */
-
-                                        $aRequestBody['notification'] = [
-                                            'title' => $aDataItem['From'],
-                                            'body' => $aDataItem['Subject']
-                                        ];
-                                        $aRequestBody['data']['click_action'] = 'FLUTTER_NOTIFICATION_CLICK';
-                                    }
+                                    $aRequestBody['notification'] = [
+                                        'title' => $aDataItem['From'],
+                                        'body' => $aDataItem['Subject']
+                                    ];
+                                    $aRequestBody['data']['click_action'] = 'FLUTTER_NOTIFICATION_CLICK';
 
                                     if ($dAllowCustomData && isset($aDataItems['Custom'])) {
                                         foreach ($aDataItems['Custom'] as $propName => $propValue) {
@@ -154,7 +136,7 @@ class Module extends \Aurora\System\Module\AbstractModule
                                         }
                                     }
 
-                                    $aFields = json_encode($aRequestBody);
+                                    $aFields = json_encode(['message' => $aRequestBody]);
 
                                     if ($dDebug && isset($aDataItems['Debug']) && $aDataItems['Debug'] === true) {
                                         var_dump($aFields);
@@ -242,7 +224,7 @@ class Module extends \Aurora\System\Module\AbstractModule
     {
         $mResult = false;
         // TODO: why authentication is not required?
-        \Aurora\Api::checkUserRoleIsAtLeast(\Aurora\System\Enums\UserRole::Anonymous);
+        \Aurora\Api::checkUserRoleIsAtLeast(UserRole::Anonymous);
 
         $bAuthStatus = true;
         foreach ($Users as $aUser) {
@@ -303,7 +285,7 @@ class Module extends \Aurora\System\Module\AbstractModule
      */
     public function SendPush($Secret, $Data)
     {
-        \Aurora\Api::checkUserRoleIsAtLeast(\Aurora\System\Enums\UserRole::Anonymous);
+        \Aurora\Api::checkUserRoleIsAtLeast(UserRole::Anonymous);
 
         $mResult = [];
         $this->checkSecret($Secret);

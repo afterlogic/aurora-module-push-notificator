@@ -12,7 +12,8 @@ use Aurora\System\SettingsProperty;
 /**
  * @property bool $Disabled
  * @property string $Secret
- * @property string $ServerKey
+ * @property string $ProjectId
+ * @property string $FirebaseServiceAccountPath
  * @property bool $AllowCustomData
  * @property bool $DebugOutput
  */
@@ -34,11 +35,17 @@ class Settings extends \Aurora\System\Module\Settings
                 null,
                 "The secret key for external services that triggers notifications"
             ),
-            "ServerKey" => new SettingsProperty(
+            "ProjectId" => new SettingsProperty(
                 "",
                 "string",
                 null,
-                "Cloud Messaging server key "
+                "Project id"
+            ),
+            "FirebaseServiceAccountPath" => new SettingsProperty(
+                "",
+                "string",
+                null,
+                "Path to service account key"
             ),
             "AllowCustomData" => new SettingsProperty(
                 false,
