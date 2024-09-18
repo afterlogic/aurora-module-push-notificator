@@ -39,13 +39,13 @@ class Settings extends \Aurora\System\Module\Settings
                 "",
                 "string",
                 null,
-                "Project id"
+                "A unique identifier of your Firebase project"
             ),
             "FirebaseServiceAccountPath" => new SettingsProperty(
                 "",
                 "string",
                 null,
-                "Path to service account key"
+                "Path to your Firebase service account key file"
             ),
             "AllowCustomData" => new SettingsProperty(
                 false,
