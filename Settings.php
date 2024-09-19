@@ -12,7 +12,7 @@ use Aurora\System\SettingsProperty;
 /**
  * @property bool $Disabled
  * @property string $Secret
- * @property string $ProjectId
+ * @property string $ProjectNumber
  * @property string $FirebaseServiceAccountPath
  * @property bool $AllowCustomData
  * @property bool $DebugOutput
@@ -35,11 +35,11 @@ class Settings extends \Aurora\System\Module\Settings
                 null,
                 "The secret key for external services that triggers notifications"
             ),
-            "ProjectId" => new SettingsProperty(
+            "ProjectNumber" => new SettingsProperty(
                 "",
                 "string",
                 null,
-                "A unique identifier of your Firebase project"
+                "The canonical identifier of your Firebase project"
             ),
             "FirebaseServiceAccountPath" => new SettingsProperty(
                 "",

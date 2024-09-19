@@ -56,14 +56,20 @@ class Module extends \Aurora\System\Module\AbstractModule
         return $this->oModuleSettings;
     }
 
-    public function getAccessToken($serviceAccountPath)
+    protected function getAccessToken($serviceAccountPath)
     {
-        $client = new Client();
-        $client->setAuthConfig($serviceAccountPath);
-        $client->addScope('https://www.googleapis.com/auth/firebase.messaging');
-        $client->useApplicationDefaultCredentials();
-        $token = $client->fetchAccessTokenWithAssertion();
-        return $token['access_token'];
+        if (!file_exists($serviceAccountPath)) {
+            throw new \Aurora\System\Exceptions\ApiException(\Aurora\System\Notifications::FileNotFound, null, 'Firebase Service Account Key file not found');
+        } elseif (!is_readable($serviceAccountPath)) {
+            throw new \Aurora\System\Exceptions\ApiException(\Aurora\System\Notifications::FilesNotAllowed, null, 'Firebase Service Account Key file not accessible');
+        } else {
+            $client = new Client();
+            $client->setAuthConfig($serviceAccountPath);
+            $client->addScope('https://www.googleapis.com/auth/firebase.messaging');
+            $client->useApplicationDefaultCredentials();
+            $token = $client->fetchAccessTokenWithAssertion();
+            return isset($token['access_token']) ? $token['access_token'] : false;
+        }
     }
 
     /**
@@ -95,96 +101,99 @@ class Module extends \Aurora\System\Module\AbstractModule
 
     public function onSendNotification($aArgs, &$mResult)
     {
-        $projectId = $this->oModuleSettings->ProjectId;
+        $projectNum = $this->oModuleSettings->ProjectNumber;
         $serviceAccountPath = $this->oModuleSettings->FirebaseServiceAccountPath;
-        if (is_array($aArgs) && count($aArgs) > 0 && !empty($projectId) && !empty($serviceAccountPath)) {
-            $sUrl = 'https://fcm.googleapis.com/v1/projects/' . $projectId . '/messages:send';
+
+        if (is_array($aArgs) && count($aArgs) > 0 && !empty($projectNum) && !empty($serviceAccountPath)) {
+            $sUrl = 'https://fcm.googleapis.com/v1/projects/' . $projectNum . '/messages:send';
 
             $dDebug = $this->oModuleSettings->DebugOutput;
             $dAllowCustomData = $this->oModuleSettings->AllowCustomData;
 
             $accessToken = $this->getAccessToken($serviceAccountPath);
 
-            $aRequestHeaders = [
-                'Content-Type: application/json',
-                'Authorization: Bearer ' . $accessToken,
-            ];
-            foreach ($aArgs as $aDataItems) {
-                if (isset($aDataItems['Email']) && isset($aDataItems['Data'])) {
-                    $sEmail = $aDataItems['Email'];
-                    $aData = $aDataItems['Data'];
-                    if (\is_array($aData) && count($aData) > 0) {
-                        $aPushTokens = PushToken::where('Email', $sEmail)->get();
-                        if (count($aPushTokens) > 0) {
-                            /** @var PushToken $oPushToken */
-                            foreach ($aPushTokens as $oPushToken) {
-                                foreach ($aData as $aDataItem) {
-                                    $aRequestBody = [
-                                        'token' => $oPushToken->Token,
-                                        'data' => $aDataItem,
-                                    ];
+            if ($accessToken) {
+                $aRequestHeaders = [
+                    'Content-Type: application/json',
+                    'Authorization: Bearer ' . $accessToken,
+                ];
+                foreach ($aArgs as $aDataItems) {
+                    if (isset($aDataItems['Email']) && isset($aDataItems['Data'])) {
+                        $sEmail = $aDataItems['Email'];
+                        $aData = $aDataItems['Data'];
+                        if (\is_array($aData) && count($aData) > 0) {
+                            $aPushTokens = PushToken::where('Email', $sEmail)->get();
+                            if (count($aPushTokens) > 0) {
+                                /** @var PushToken $oPushToken */
+                                foreach ($aPushTokens as $oPushToken) {
+                                    foreach ($aData as $aDataItem) {
+                                        $aRequestBody = [
+                                            'token' => $oPushToken->Token,
+                                            'data' => $aDataItem,
+                                        ];
 
-                                    $aRequestBody['notification'] = [
-                                        'title' => $aDataItem['From'],
-                                        'body' => $aDataItem['Subject']
-                                    ];
-                                    $aRequestBody['data']['click_action'] = 'FLUTTER_NOTIFICATION_CLICK';
+                                        $aRequestBody['notification'] = [
+                                            'title' => $aDataItem['From'],
+                                            'body' => $aDataItem['Subject']
+                                        ];
+                                        $aRequestBody['data']['click_action'] = 'FLUTTER_NOTIFICATION_CLICK';
 
-                                    if ($dAllowCustomData && isset($aDataItems['Custom'])) {
-                                        foreach ($aDataItems['Custom'] as $propName => $propValue) {
-                                            $aRequestBody[$propName] = $propValue;
+                                        if ($dAllowCustomData && isset($aDataItems['Custom'])) {
+                                            foreach ($aDataItems['Custom'] as $propName => $propValue) {
+                                                $aRequestBody[$propName] = $propValue;
+                                            }
+                                        }
+
+                                        $aFields = json_encode(['message' => $aRequestBody]);
+
+                                        if ($dDebug && isset($aDataItems['Debug']) && $aDataItems['Debug'] === true) {
+                                            var_dump($aFields);
+                                            exit;
+                                        }
+
+                                        $ch = curl_init();
+                                        curl_setopt_array(
+                                            $ch,
+                                            [
+                                                CURLOPT_URL => $sUrl,
+                                                CURLOPT_CUSTOMREQUEST => 'POST',
+                                                CURLOPT_HTTPHEADER => $aRequestHeaders,
+                                                CURLOPT_POSTFIELDS => $aFields,
+                                                CURLOPT_RETURNTRANSFER => true,
+                                                CURLOPT_FOLLOWLOCATION => true
+                                            ]
+                                        );
+
+                                        $aPushResult = \json_decode(curl_exec($ch), true);
+                                        $mResult[] = [
+                                            "Email" => $sEmail,
+                                            "Token" => $oPushToken->Token,
+                                            "Response" => $aPushResult
+                                        ];
+
+                                        if ($aPushResult['failure'] == 1 && isset($aPushResult['results'][0]) && $aPushResult['results'][0]['error'] === 'NotRegistered') {
+                                            $oPushToken->delete();
+                                        }
+                                        curl_close($ch);
+                                    }
+                                }
+                            } else {
+                                try {
+                                    $oUser = \Aurora\Modules\Core\Module::Decorator()->GetUserByPublicId($sEmail);
+                                    if ($oUser) {
+                                        /** @var \Aurora\Modules\Mail\Module $oMailModule */
+                                        $oMailModule = \Aurora\System\Api::GetModule('Mail');
+                                        if ($oMailModule) {
+                                            $oAccount = $oMailModule->getAccountsManager()->getAccountByEmail($sEmail, $oUser->Id);
+                                            \Aurora\System\Api::GrantAdminPrivileges();
+                                            if ($oAccount instanceof MailAccount) {
+                                                $this->DisablePushNotification($oAccount->Id, $oUser->Id);
+                                            }
                                         }
                                     }
-
-                                    $aFields = json_encode(['message' => $aRequestBody]);
-
-                                    if ($dDebug && isset($aDataItems['Debug']) && $aDataItems['Debug'] === true) {
-                                        var_dump($aFields);
-                                        exit;
-                                    }
-
-                                    $ch = curl_init();
-                                    curl_setopt_array(
-                                        $ch,
-                                        [
-                                            CURLOPT_URL => $sUrl,
-                                            CURLOPT_CUSTOMREQUEST => 'POST',
-                                            CURLOPT_HTTPHEADER => $aRequestHeaders,
-                                            CURLOPT_POSTFIELDS => $aFields,
-                                            CURLOPT_RETURNTRANSFER => true,
-                                            CURLOPT_FOLLOWLOCATION => true
-                                        ]
-                                    );
-
-                                    $aPushResult = \json_decode(curl_exec($ch), true);
-                                    $mResult[] = [
-                                        "Email" => $sEmail,
-                                        "Token" => $oPushToken->Token,
-                                        "Response" => $aPushResult
-                                    ];
-
-                                    if ($aPushResult['failure'] == 1 && isset($aPushResult['results'][0]) && $aPushResult['results'][0]['error'] === 'NotRegistered') {
-                                        $oPushToken->delete();
-                                    }
-                                    curl_close($ch);
-                                }
+                                } catch (\Exception $oEx) {
+                                } // skip throw exception - pipe farward may not exists
                             }
-                        } else {
-                            try {
-                                $oUser = \Aurora\Modules\Core\Module::Decorator()->GetUserByPublicId($sEmail);
-                                if ($oUser) {
-                                    /** @var \Aurora\Modules\Mail\Module $oMailModule */
-                                    $oMailModule = \Aurora\System\Api::GetModule('Mail');
-                                    if ($oMailModule) {
-                                        $oAccount = $oMailModule->getAccountsManager()->getAccountByEmail($sEmail, $oUser->Id);
-                                        \Aurora\System\Api::GrantAdminPrivileges();
-                                        if ($oAccount instanceof MailAccount) {
-                                            $this->DisablePushNotification($oAccount->Id, $oUser->Id);
-                                        }
-                                    }
-                                }
-                            } catch (\Exception $oEx) {
-                            } // skip throw exception - pipe farward may not exists
                         }
                     }
                 }
