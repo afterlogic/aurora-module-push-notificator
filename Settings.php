@@ -45,7 +45,7 @@ class Settings extends \Aurora\System\Module\Settings
                 "",
                 "string",
                 null,
-                "Path to your Firebase service account key file"
+                "Path to your Firebase service account key file relative to the Aurora's data directory"
             ),
             "AllowCustomData" => new SettingsProperty(
                 false,

@@ -110,7 +110,7 @@ class Module extends \Aurora\System\Module\AbstractModule
             $dDebug = $this->oModuleSettings->DebugOutput;
             $dAllowCustomData = $this->oModuleSettings->AllowCustomData;
 
-            $accessToken = $this->getAccessToken($serviceAccountPath);
+            $accessToken = $this->getAccessToken(\Aurora\System\Api::DataPath() . '/' . $serviceAccountPath);
 
             if ($accessToken) {
                 $aRequestHeaders = [
