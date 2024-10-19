@@ -24,6 +24,11 @@ use Google\Client;
  */
 class Module extends \Aurora\System\Module\AbstractModule
 {
+    /*
+     * @var $oSieveManager Managers\Sieve\Manager
+     */
+    protected $oSieveManager = null;
+
     public function init()
     {
         $this->AddEntry('push', 'onSendPushRoute');
@@ -54,6 +59,18 @@ class Module extends \Aurora\System\Module\AbstractModule
     public function getModuleSettings()
     {
         return $this->oModuleSettings;
+    }
+
+    /**
+     *@return Managers\Sieve\Manager
+     */
+    protected function getSieveManager()
+    {
+        if ($this->oSieveManager === null) {
+            $this->oSieveManager = new Managers\Sieve\Manager($this->oModuleSettings);
+        }
+
+        return $this->oSieveManager;
     }
 
     protected function getAccessToken($serviceAccountPath)
@@ -197,6 +214,8 @@ class Module extends \Aurora\System\Module\AbstractModule
                         }
                     }
                 }
+            } else {
+                \Aurora\System\Api::Log("Service account not found", \Aurora\System\Enums\LogLevel::Full, 'push-');
             }
         }
         \Aurora\System\Api::Log("", \Aurora\System\Enums\LogLevel::Full, 'push-');

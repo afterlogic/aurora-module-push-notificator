@@ -59,6 +59,12 @@ class Settings extends \Aurora\System\Module\Settings
                 null,
                 ""
             ),
+            "SieveScriptName" => new SettingsProperty(
+                "sieve-filters-notification-handler.php",
+                "string",
+                null,
+                "",
+            ),
         ];
     }
 }
