@@ -181,15 +181,19 @@ class Module extends \Aurora\System\Module\AbstractModule
                                             ]
                                         );
 
-                                        $aPushResult = \json_decode(curl_exec($ch), true);
+                                        $aPushResponse = \json_decode(curl_exec($ch), true);
                                         $mResult[] = [
                                             "Email" => $sEmail,
                                             "Token" => $oPushToken->Token,
-                                            "Response" => $aPushResult
+                                            "Response" => $aPushResponse
                                         ];
 
-                                        if ($aPushResult['failure'] == 1 && isset($aPushResult['results'][0]) && $aPushResult['results'][0]['error'] === 'NotRegistered') {
-                                            $oPushToken->delete();
+                                        if (isset($aPushResponse['error'])) {
+                                            $iErrorCode = $aPushResponse['error']['code'] ?? 0;
+
+                                            if ($iErrorCode === 404) {
+                                                $oPushToken->delete();
+                                            }
                                         }
                                         curl_close($ch);
                                     }
