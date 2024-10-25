@@ -122,9 +122,9 @@ if (!$CONFIG_AURORA_URL) {
     //     exit(0);
     // }
 
-    if (empty($sRecipient)) {
+    if (empty($RECIPIENT)) {
         $logger('Recipient address is not found.');
-    } elseif (empty($sSender) && empty($sMessageSubject)) {
+    } elseif (empty($SENDER) && empty($sMessageSubject)) {
         $logger('"From" and "Subject" headers are not found in the mail message.');
     } else {
         $aPushMessageData = [
