@@ -7,20 +7,23 @@ if (PHP_SAPI !== 'cli') {
  * @var string $CONFIG_AURORA_URL
  * @var string $CONFIG_SECRET
  * @var string $CONFIG_LOG_FILE_PATH
+ * @var bool $DEBUG_MODE
+ * @var string $DEBUG_RECIPIENT
+ * @var string $DEBUG_SENDER
  */
 
 $DIR = __DIR__ . '/';
 include $DIR . 'aurora-notification-handler-config.php';
 $DATE = date("Y-m-d");
-$LOG_FILE = $CONFIG_LOG_FILE_PATH . 'seive-script-log-' . $DATE . '.log';
+$LOG_FILE = (string) $CONFIG_LOG_FILE_PATH . 'seive-script-log-' . $DATE . '.log';
 
 $oColors = (object)['no' => "\033[0m",'red' => "\033[1;31m",'green' => "\033[1;32m",'yellow' => "\033[1;33m",'bg_red' => "\033[1;41m",'bg_green' => "\033[1;42m",'bg_yellow' => "\033[1;43m"];
-$bDebug = false;
+$bDebug = !!$DEBUG_MODE;
 
 if ($bDebug) {
     $LOG_FILE = $DIR . 'seive-script-log-' . $DATE . '.log';
-    $SENDER = 'sender@domain.com';
-    $RECIPIENT = '';
+    $SENDER = (string) $DEBUG_RECIPIENT;
+    $RECIPIENT = (string) $DEBUG_RECIPIENT;
     $sMessage = file_get_contents($DIR . 'message.eml');
 } else {
     // available environment variables: $HOME, $USER, $SENDER, $RECIPIENT, $ORIG_RECIPIENT
@@ -55,26 +58,82 @@ $logger = function ($label = '', ...$args) use ($oColors, $bDebug, $bLogFileExis
     file_put_contents($LOG_FILE, $text, FILE_APPEND);
 };
 
+/**
+ * Decodes a MIME header (RFC 2047) into UTF-8.
+ * Supports non-Latin characters, Q/Base64 encoding, multiple encoded-words.
+ *
+ * @param string $header The original header (e.g., Subject, From, etc.)
+ * @return string Decoded UTF-8 string
+ */
+function decode_mime_header_utf8(string $header): string
+{
+    // 1) Remove "folding": CRLF + WSP -> space
+    $h = preg_replace("/\r?\n[ \t]+/", " ", $header);
+
+    // 2) Decode all blocks =?charset?Q|B?...?=
+    $decoded = preg_replace_callback(
+        '/=\?([^?]+)\?([bBqQ])\?([^?]*)\?=/u',
+        function ($m) {
+            $charset = trim($m[1], " \t\"'");       // e.g. UTF-8, KOI8-R, windows-1251
+            $encoding = strtoupper($m[2]);          // Q or B
+            $text = $m[3];
+
+            if ($encoding === 'B') {
+                $bin = base64_decode($text, true);
+            } else { // Q-encoding in headers: "_" = space
+                $text = str_replace('_', ' ', $text);
+                $bin = quoted_printable_decode($text);
+            }
+
+            if ($bin === false) {
+                return $m[0]; // fallback to original fragment
+            }
+
+            // 3) Convert to UTF-8 safely, handling exotic charsets
+            // Prefer mbstring, fallback to iconv
+            if (function_exists('mb_convert_encoding')) {
+                $out = @mb_convert_encoding($bin, 'UTF-8', $charset);
+                if ($out !== false) {
+                    return $out;
+                }
+            }
+            if (function_exists('iconv')) {
+                $out = @iconv($charset, 'UTF-8//TRANSLIT', $bin);
+                if ($out !== false) {
+                    return $out;
+                }
+            }
+
+            // If conversion failed — return raw data
+            return $bin;
+        },
+        $h
+    );
+
+    // 4) Normalize spaces between adjacent encoded-words
+    $decoded = preg_replace('/\s{2,}/u', ' ', $decoded);
+
+    return trim($decoded);
+}
+
 function getMessageSubject($sMessage)
 {
     $sSubject = '';
     preg_match("/^(?:\s*subject):\s*(.+)$/im", $sMessage, $aMatch);
     if (isset($aMatch[1])) {
-        $sSubject = trim($aMatch[1]);
-        // TODO: decrypt UTF8-encoded values
+        $sSubject = decode_mime_header_utf8(trim($aMatch[1]));
     }
     return $sSubject;
 };
 
 function getMessageId($sMessage)
 {
-    $sSubject = '';
+    $sMessageId = '';
     preg_match("/^(?:\s*message-id):\s*(.+)$/im", $sMessage, $aMatch);
     if (isset($aMatch[1])) {
-        $sSubject = trim($aMatch[1]);
-        // TODO: decrypt UTF8-encoded values
+        $sMessageId = trim($aMatch[1]);
     }
-    return $sSubject;
+    return $sMessageId;
 };
 
 // Get the message subject
@@ -90,38 +149,6 @@ $logger("Message id:", $sMessageId);
 if (!$CONFIG_AURORA_URL) {
     $logger("CONFIG_AURORA_URL is not set!");
 } else {
-
-    /* === getting account setting ==== */
-    // if (!($USER && $PASS && $DATABASE)) {
-    //     $logger("", "The script is not configured properly!");
-    //     exit(0);
-    // }
-    // $mysqli = new mysqli("127.0.0.1", $USER, $PASS, $DATABASE);
-
-    // if ($mysqli->connect_errno) {
-    //     $logger("Failed to connect to MySQL:", $mysqli->connect_error);
-    //     exit(0);
-    // }
-
-    // Getting message resipient's settings
-    // $sAccountParamSQL = "" .
-    // "SELECT * FROM mail_accounts AS a
-    // LEFT JOIN core_users AS u ON u.Id = a.IdUser
-    // WHERE a.Email === '$RECIPIENT' AND u.PublicId = '$RECIPIENT'";
-
-    // if ($bDebug) {
-    //     $logger("Account SQL: \n", $sAccountParamSQL);
-    // }
-
-    // // Execute the query and get the contacts count
-    // $oResult = $mysqli->query($sAccountParamSQL);
-    // $sAccountProperties = (int) $oResult->fetch_assoc()['Properties'];
-
-    // if (!$aAccountParams || !isset($aAccountParams['PushEnabled'])) {
-    //     $logger("No params found for mail account:", $RECIPIENT);
-    //     exit(0);
-    // }
-
     if (empty($RECIPIENT)) {
         $logger('Recipient address is not found.');
     } elseif (empty($SENDER) && empty($sMessageSubject)) {
