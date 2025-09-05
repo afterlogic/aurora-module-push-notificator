@@ -59,92 +59,86 @@ $logger = function ($label = '', ...$args) use ($oColors, $bDebug, $bLogFileExis
 };
 
 /**
- * Decodes a MIME header (RFC 2047) into UTF-8.
- * Supports non-Latin characters, Q/Base64 encoding, multiple encoded-words.
+ * Extracts Subject and Message-ID headers from a raw EML message.
+ * - Subject: returns '' when header exists but is empty; null if header missing.
+ * - Message-ID: angle brackets are stripped if present.
  *
- * @param string $header The original header (e.g., Subject, From, etc.)
- * @return string Decoded UTF-8 string
+ * @param string $eml Full EML message as string
+ * @return array{subject: string|null, message_id: string|null}
  */
-function decode_mime_header_utf8(string $header): string
+function getHeadersFromEml(string $eml): array
 {
-    // 1) Remove "folding": CRLF + WSP -> space
-    $h = preg_replace("/\r?\n[ \t]+/", " ", $header);
+    // Split headers and body (first empty line separates them)
+    $parts = preg_split("/\R\R/", $eml, 2);
+    $rawHeaders = $parts[0] ?? '';
 
-    // 2) Decode all blocks =?charset?Q|B?...?=
-    $decoded = preg_replace_callback(
-        '/=\?([^?]+)\?([bBqQ])\?([^?]*)\?=/u',
-        function ($m) {
-            $charset = trim($m[1], " \t\"'");       // e.g. UTF-8, KOI8-R, windows-1251
-            $encoding = strtoupper($m[2]);          // Q or B
-            $text = $m[3];
+    // Unfold headers: join continuation lines starting with space or tab
+    $rawHeaders = preg_replace("/\r?\n[ \t]+/", ' ', $rawHeaders);
 
-            if ($encoding === 'B') {
-                $bin = base64_decode($text, true);
-            } else { // Q-encoding in headers: "_" = space
-                $text = str_replace('_', ' ', $text);
-                $bin = quoted_printable_decode($text);
-            }
+    $result = [
+        'subject'    => null,
+        'message_id' => null,
+    ];
 
-            if ($bin === false) {
-                return $m[0]; // fallback to original fragment
-            }
+    // Subject: allow empty value -> use (.*) not (.+), anchored at start of line
+    if (preg_match('/^Subject:[ \t]*(.*)$/mi', $rawHeaders, $m)) {
+        $rawSubject = rtrim($m[1]); // keep empty string if it's truly empty
 
-            // 3) Convert to UTF-8 safely, handling exotic charsets
-            // Prefer mbstring, fallback to iconv
-            if (function_exists('mb_convert_encoding')) {
-                $out = @mb_convert_encoding($bin, 'UTF-8', $charset);
-                if ($out !== false) {
-                    return $out;
-                }
-            }
-            if (function_exists('iconv')) {
-                $out = @iconv($charset, 'UTF-8//TRANSLIT', $bin);
-                if ($out !== false) {
-                    return $out;
-                }
-            }
+        $decoded = decode_mime_header_best_effort($rawSubject);
+        // If decoder returns null, keep raw; if it's empty string, preserve emptiness
+        $result['subject'] = $decoded !== null ? $decoded : $rawSubject;
+    }
 
-            // If conversion failed — return raw data
-            return $bin;
-        },
-        $h
-    );
+    // Message-ID: prefer <...>, fallback to non-space token
+    if (preg_match('/^Message-ID:[ \t]*(\S+)/mi', $rawHeaders, $m)) {
+        $result['message_id'] = trim($m[1]);
+    }
 
-    // 4) Normalize spaces between adjacent encoded-words
-    $decoded = preg_replace('/\s{2,}/u', ' ', $decoded);
-
-    return trim($decoded);
+    return $result;
 }
 
-function getMessageSubject($sMessage)
+/**
+ * Best-effort MIME header decode to UTF-8.
+ * Returns '' for empty input, null only on hard failure.
+ */
+function decode_mime_header_best_effort(string $value): ?string
 {
-    $sSubject = '';
-    preg_match("/^(?:\s*subject):\s*(.+)$/im", $sMessage, $aMatch);
-    if (isset($aMatch[1])) {
-        $sSubject = decode_mime_header_utf8(trim($aMatch[1]));
+    // Preserve explicit emptiness
+    if (trim($value) === '') {
+        return '';
     }
-    return $sSubject;
-};
 
-function getMessageId($sMessage)
-{
-    $sMessageId = '';
-    preg_match("/^(?:\s*message-id):\s*(.+)$/im", $sMessage, $aMatch);
-    if (isset($aMatch[1])) {
-        $sMessageId = trim($aMatch[1]);
+    // Prefer mbstring
+    if (function_exists('mb_decode_mimeheader')) {
+        $out = @mb_decode_mimeheader($value);
+        // mb_decode_mimeheader never returns false, but keep symmetry
+        return $out;
     }
-    return $sMessageId;
-};
 
+    // Fallback to iconv
+    if (function_exists('iconv_mime_decode')) {
+        $out = @iconv_mime_decode($value, ICONV_MIME_DECODE_CONTINUE_ON_ERROR, 'UTF-8');
+        if ($out !== false) {
+            return $out;
+        }
+    }
+
+    // Last resort: return as-is
+    return $value;
+}
+
+
+$headers = getHeadersFromEml($sMessage);
 // Get the message subject
-$sMessageSubject = getMessageSubject($sMessage);
+$sMessageSubject = $headers['subject'] ?? '';
 // Get the message id line
-$sMessageId = getMessageId($sMessage);
+$sMessageId = $headers['message_id'] ?? '';
 
 /* === Output debug info ==== */
 $logger("=== Process incomming message ===");
 $logger("Recipient:", $RECIPIENT);
 $logger("Message id:", $sMessageId);
+$logger("Subject:", $sMessageSubject);
 
 if (!$CONFIG_AURORA_URL) {
     $logger("CONFIG_AURORA_URL is not set!");
