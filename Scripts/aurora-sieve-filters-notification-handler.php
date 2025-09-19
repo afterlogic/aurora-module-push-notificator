@@ -34,7 +34,7 @@ if ($bDebug) {
 
 // Define a log function
 $bLogFileExists = false;
-$logger = function ($label = '', ...$args) use ($oColors, $bDebug, $bLogFileExists, $LOG_FILE) {
+$logger = function ($label = '', ...$args) use ($oColors, $bDebug, $bLogFileExists, $LOG_FILE, $CONFIG_SECRET) {
     if (!$bLogFileExists) {
         $dir = dirname($LOG_FILE);
 
@@ -55,6 +55,7 @@ $logger = function ($label = '', ...$args) use ($oColors, $bDebug, $bLogFileExis
     }
     $TIME = date("h:i:s") . "." . substr((string)microtime(), 2, 3);
     $text = '[' . $TIME . '] ' . $label . ' ' . implode(" ", $args) . "\n";
+    $text = str_replace($CONFIG_SECRET, "******", $text);
     file_put_contents($LOG_FILE, $text, FILE_APPEND);
 };
 
