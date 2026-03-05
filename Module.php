@@ -11,6 +11,7 @@ use Aurora\Modules\PushNotificator\Models\PushToken;
 use Aurora\System\Enums\UserRole;
 use Aurora\Modules\Core\Models\User;
 use Aurora\Modules\Mail\Models\MailAccount;
+use Aurora\System\Facades\Route;
 use Google\Client;
 
 /**
@@ -31,7 +32,12 @@ class Module extends \Aurora\System\Module\AbstractModule
 
     public function init()
     {
-        $this->AddEntry('push', 'onSendPushRoute');
+        Route::add(
+            $this,
+            [
+                'push' => 'onSendPushRoute',
+            ]
+        );
 
         $this->subscribeEvent('Mail::BeforeDeleteAccount', array($this, 'onBeforeDeleteMailAccount'));
         $this->subscribeEvent('SendNotification', array($this, 'onSendNotification'));
