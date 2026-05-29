@@ -82,16 +82,25 @@ class Module extends \Aurora\System\Module\AbstractModule
     protected function getAccessToken($serviceAccountPath)
     {
         if (!file_exists($serviceAccountPath)) {
-            throw new \Aurora\System\Exceptions\ApiException(\Aurora\System\Notifications::FileNotFound, null, 'Firebase Service Account Key file not found');
-        } elseif (!is_readable($serviceAccountPath)) {
-            throw new \Aurora\System\Exceptions\ApiException(\Aurora\System\Notifications::FilesNotAllowed, null, 'Firebase Service Account Key file not accessible');
-        } else {
+            \Aurora\System\Api::Log("Firebase Service Account Key file not found: " . $serviceAccountPath, \Aurora\System\Enums\LogLevel::Warning, 'push-');
+            return false;
+        }
+
+        if (!is_readable($serviceAccountPath)) {
+            \Aurora\System\Api::Log("Firebase Service Account Key file not accessible: " . $serviceAccountPath, \Aurora\System\Enums\LogLevel::Warning, 'push-');
+            return false;
+        }
+
+        try {
             $client = new Client();
             $client->setAuthConfig($serviceAccountPath);
             $client->addScope('https://www.googleapis.com/auth/firebase.messaging');
             $client->useApplicationDefaultCredentials();
             $token = $client->fetchAccessTokenWithAssertion();
             return isset($token['access_token']) ? $token['access_token'] : false;
+        } catch (\Exception $oEx) {
+            \Aurora\System\Api::LogObject($oEx, \Aurora\System\Enums\LogLevel::Full, 'push-');
+            return false;
         }
     }
 
